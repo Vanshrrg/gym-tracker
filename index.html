@@ -41,9 +41,13 @@
   button.btn.ghost{background:transparent;}
   .btn-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
   .exercise-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;}
-  .exercise-card .ex-head{display:flex;justify-content:space-between;align-items:center;}
+  .exercise-card .ex-head{display:flex;justify-content:space-between;align-items:center;cursor:pointer;}
+  .exercise-card.collapsed .ex-body{display:none;}
+  .exercise-card .ex-summary{font-size:13px;color:var(--text-dim);margin-top:2px;}
   .set-row{display:flex;gap:6px;align-items:center;margin-top:6px;}
-  .set-row span{font-size:12px;color:var(--text-dim);width:44px;}
+  .set-row span{font-size:12px;color:var(--text-dim);width:44px;flex:none;}
+  .set-row input{flex:1;}
+  .last-set-hint{font-size:11px;color:var(--text-dim);width:60px;flex:none;text-align:right;}
   .pill{display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:3px 10px;font-size:11px;color:var(--text-dim);margin-right:6px;margin-bottom:6px;}
   .pill.warn{border-color:var(--amber);color:var(--amber);}
   .pill.ok{border-color:var(--green);color:var(--green);}
@@ -102,21 +106,23 @@
       <label>Exercise name</label>
       <input list="exLibList" id="newExName" placeholder="e.g. Pull-up">
       <datalist id="exLibList"></datalist>
-      <div class="row">
-        <div>
-          <label>Weight (kg)</label>
-          <input type="number" id="newExWeight" inputmode="decimal" placeholder="0">
-        </div>
-        <div>
-          <label>Bodyweight?</label>
-          <select id="newExBW"><option value="no">No</option><option value="yes">Yes, add BW</option></select>
-        </div>
+
+      <div id="lastSessionCompare"></div>
+
+      <label>Bodyweight?</label>
+      <select id="newExBW">
+        <option value="none">No</option>
+        <option value="weighted">Weighted (+BW to added weight)</option>
+        <option value="assisted">Assisted (BW − assistance weight)</option>
+      </select>
+
+      <label>Sets — each can have its own weight &amp; reps</label>
+      <div id="setRows"></div>
+      <div class="btn-row">
+        <button class="btn small" id="addSetRowBtn">+ Add set</button>
+        <button class="btn small ghost" id="removeSetRowBtn">– Remove set</button>
       </div>
-      <label>Sets × Reps (comma separated reps, e.g. 10,10,8)</label>
-      <div class="row">
-        <input type="number" id="newExSets" placeholder="Sets (3-4)" min="1" value="3">
-        <input type="text" id="newExReps" placeholder="Reps per set e.g. 10,10,8">
-      </div>
+
       <label>Notes (optional)</label>
       <textarea id="newExNotes" placeholder="Notes..."></textarea>
       <div class="btn-row">
@@ -199,31 +205,33 @@ const defaultData = () => ({
 
 function defaultLibrary(){
   return {
-    "Pull-up": {group:"lats", bw:true},
-    "Lat Pulldown": {group:"lats", bw:false},
-    "Barbell Row": {group:"mid-back", bw:false},
-    "Seated Cable Row": {group:"mid-back", bw:false},
-    "Face Pull": {group:"rear delts", bw:false},
-    "Rear Delt Fly": {group:"rear delts", bw:false},
-    "Barbell Curl": {group:"biceps", bw:false},
-    "Dumbbell Curl": {group:"biceps", bw:false},
-    "Hammer Curl": {group:"brachialis", bw:false},
-    "Bench Press": {group:"chest", bw:false},
-    "Incline Dumbbell Press": {group:"chest", bw:false},
-    "Push-up": {group:"chest", bw:true},
-    "Overhead Press": {group:"front delts", bw:false},
-    "Dumbbell Shoulder Press": {group:"front delts", bw:false},
-    "Tricep Pushdown": {group:"triceps", bw:false},
-    "Overhead Tricep Extension": {group:"triceps", bw:false},
-    "Dip": {group:"triceps", bw:true},
-    "Squat": {group:"quads", bw:false},
-    "Leg Press": {group:"quads", bw:false},
-    "Leg Extension": {group:"quads", bw:false},
-    "Romanian Deadlift": {group:"hamstrings", bw:false},
-    "Leg Curl": {group:"hamstrings", bw:false},
-    "Hip Thrust": {group:"glutes", bw:false},
-    "Glute Bridge": {group:"glutes", bw:false},
-    "Calf Raise": {group:"calves", bw:false}
+    "Pull-up": {group:"lats", bwMode:"weighted"},
+    "Assisted Pull-up": {group:"lats", bwMode:"assisted"},
+    "Lat Pulldown": {group:"lats", bwMode:"none"},
+    "Barbell Row": {group:"mid-back", bwMode:"none"},
+    "Seated Cable Row": {group:"mid-back", bwMode:"none"},
+    "Face Pull": {group:"rear delts", bwMode:"none"},
+    "Rear Delt Fly": {group:"rear delts", bwMode:"none"},
+    "Barbell Curl": {group:"biceps", bwMode:"none"},
+    "Dumbbell Curl": {group:"biceps", bwMode:"none"},
+    "Hammer Curl": {group:"brachialis", bwMode:"none"},
+    "Bench Press": {group:"chest", bwMode:"none"},
+    "Incline Dumbbell Press": {group:"chest", bwMode:"none"},
+    "Push-up": {group:"chest", bwMode:"weighted"},
+    "Overhead Press": {group:"front delts", bwMode:"none"},
+    "Dumbbell Shoulder Press": {group:"front delts", bwMode:"none"},
+    "Tricep Pushdown": {group:"triceps", bwMode:"none"},
+    "Overhead Tricep Extension": {group:"triceps", bwMode:"none"},
+    "Dip": {group:"triceps", bwMode:"weighted"},
+    "Assisted Dip": {group:"triceps", bwMode:"assisted"},
+    "Squat": {group:"quads", bwMode:"none"},
+    "Leg Press": {group:"quads", bwMode:"none"},
+    "Leg Extension": {group:"quads", bwMode:"none"},
+    "Romanian Deadlift": {group:"hamstrings", bwMode:"none"},
+    "Leg Curl": {group:"hamstrings", bwMode:"none"},
+    "Hip Thrust": {group:"glutes", bwMode:"none"},
+    "Glute Bridge": {group:"glutes", bwMode:"none"},
+    "Calf Raise": {group:"calves", bwMode:"none"}
   };
 }
 
@@ -239,12 +247,37 @@ const SPLIT_GROUPS = {
 let data = loadData();
 let currentSession = null; // in-progress session object
 
+function migrateExercise(ex){
+  // old format: {name, weight, bw, reps:[...], notes} -> new: {name, bwMode, notes, sets:[{weight,reps}]}
+  if(!ex.sets){
+    const reps = ex.reps || [10,10,10];
+    ex.sets = reps.map(r=>({weight: ex.weight||0, reps: r}));
+    delete ex.weight;
+    delete ex.reps;
+  }
+  if(!ex.bwMode){
+    ex.bwMode = ex.bw ? "weighted" : "none";
+  }
+  delete ex.bw;
+  return ex;
+}
+function migrateLibraryEntry(meta){
+  if(!meta.bwMode) meta.bwMode = meta.bw ? "weighted" : "none";
+  delete meta.bw;
+  return meta;
+}
 function loadData(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
     if(!raw) return defaultData();
     const parsed = JSON.parse(raw);
-    return Object.assign(defaultData(), parsed, {library: Object.assign(defaultLibrary(), parsed.library||{})});
+    const merged = Object.assign(defaultData(), parsed, {library: Object.assign(defaultLibrary(), parsed.library||{})});
+    merged.sessions = (merged.sessions||[]).map(s=>{
+      s.exercises = (s.exercises||[]).map(migrateExercise);
+      return s;
+    });
+    Object.values(merged.library).forEach(migrateLibraryEntry);
+    return merged;
   }catch(e){ return defaultData(); }
 }
 function saveData(){
@@ -274,6 +307,10 @@ function newEmptySession(){
   return { id: "s"+Date.now(), date: todayStr(), type: "", typeManual: false, exercises: [] };
 }
 currentSession = newEmptySession();
+
+/* set-row builder state for the Add Exercise form */
+let setRowCount = 3;
+const MAX_SETS = 4;
 
 /* ---------- Split inference ---------- */
 function inferSessionType(exercises){
@@ -309,7 +346,85 @@ function renderSessionView(){
   renderMissingGroups();
   renderSessionTotals();
   renderExLibraryDatalist();
+  renderSetRows();
 }
+
+/* ---------- Add-exercise set rows (per-set weight & reps) ---------- */
+let clearSetRowValues = false;
+function renderSetRows(){
+  const container = document.getElementById("setRows");
+  const prevWeights = [], prevReps = [];
+  if(!clearSetRowValues){
+    container.querySelectorAll(".set-row").forEach(row=>{
+      prevWeights.push(row.querySelector(".set-weight").value);
+      prevReps.push(row.querySelector(".set-reps").value);
+    });
+  }
+  clearSetRowValues = false;
+  container.innerHTML = "";
+  for(let i=0;i<setRowCount;i++){
+    const row = document.createElement("div");
+    row.className = "set-row";
+    row.innerHTML = `
+      <span>Set ${i+1}</span>
+      <input type="number" class="set-weight" inputmode="decimal" placeholder="kg" value="${prevWeights[i]||''}">
+      <input type="number" class="set-reps" inputmode="numeric" placeholder="reps" value="${prevReps[i]||''}">
+      <span class="last-set-hint" data-hint="${i}"></span>
+    `;
+    container.appendChild(row);
+  }
+  updateSetRowHints();
+}
+document.getElementById("addSetRowBtn").addEventListener("click", ()=>{
+  if(setRowCount<MAX_SETS){ setRowCount++; renderSetRows(); }
+});
+document.getElementById("removeSetRowBtn").addEventListener("click", ()=>{
+  if(setRowCount>1){ setRowCount--; renderSetRows(); }
+});
+
+function updateSetRowHints(){
+  const name = document.getElementById("newExName").value.trim();
+  const last = name ? getLastPerformance(name) : null;
+  document.querySelectorAll(".last-set-hint").forEach(el=>{
+    const idx = parseInt(el.dataset.hint);
+    if(last && last.ex.sets[idx]){
+      const s = last.ex.sets[idx];
+      el.textContent = `was ${s.weight}×${s.reps}`;
+    } else {
+      el.textContent = "";
+    }
+  });
+}
+
+function renderLastSessionCompare(){
+  const box = document.getElementById("lastSessionCompare");
+  const name = document.getElementById("newExName").value.trim();
+  if(!name){ box.innerHTML = ""; return; }
+
+  const bwSelect = document.getElementById("newExBW");
+  if(data.library[name] && data.library[name].bwMode){
+    bwSelect.value = data.library[name].bwMode;
+  }
+  const last = getLastPerformance(name);
+  if(!last){ box.innerHTML = `<p class="muted" style="margin-top:6px;">No history yet for "${escapeHtml(name)}" — this will be the baseline.</p>`; return; }
+  const prog = suggestProgression(name, last);
+  const setsStr = last.ex.sets.map(s=>`${s.weight}kg×${s.reps}`).join(", ");
+  box.innerHTML = `
+    <div class="card suggest-card" style="margin-top:6px;padding:10px;">
+      <div class="muted">Last time (${last.session.date}): ${setsStr}</div>
+      ${prog ? `<div style="margin-top:4px;">📈 ${escapeHtml(prog.msg)}</div>
+      <button class="btn small" id="useSuggestedWeightBtn" style="margin-top:6px;">Use ${prog.weightSuggestion}kg for all sets</button>` : ""}
+    </div>
+  `;
+  const useBtn = document.getElementById("useSuggestedWeightBtn");
+  if(useBtn){
+    useBtn.addEventListener("click", ()=>{
+      document.querySelectorAll(".set-weight").forEach(inp=> inp.value = prog.weightSuggestion);
+    });
+  }
+  updateSetRowHints();
+}
+document.getElementById("newExName").addEventListener("input", renderLastSessionCompare);
 
 function getLastPerformance(exName){
   for(let i=data.sessions.length-1;i>=0;i--){
@@ -323,34 +438,42 @@ function getLastPerformance(exName){
 function suggestProgression(exName, lastPerf){
   if(!lastPerf) return null;
   const ex = lastPerf.ex;
-  const allHit12 = ex.reps.every(r=>r>=12);
-  const failedBelow8 = ex.reps.some(r=>r<8);
+  const reps = ex.sets.map(s=>s.reps);
+  const topWeight = Math.max(...ex.sets.map(s=>s.weight));
+  const allHit12 = reps.every(r=>r>=12);
+  const failedBelow8 = reps.some(r=>r<8);
   let msg, weightSuggestion;
   if(allHit12){
-    weightSuggestion = round1(ex.weight * 1.05);
+    weightSuggestion = round1(topWeight * 1.05);
     msg = `All sets hit 12 reps last time — try bumping weight to ~${weightSuggestion}kg`;
   } else if(failedBelow8){
-    weightSuggestion = round1(ex.weight * 0.9);
+    weightSuggestion = round1(topWeight * 0.9);
     msg = `Missed 8 reps on a set last time — consider dropping to ~${weightSuggestion}kg or keep reps focus`;
   } else {
-    weightSuggestion = ex.weight;
-    msg = `Aim to add a rep or two on ${ex.weight}kg before increasing load`;
+    weightSuggestion = topWeight;
+    msg = `Aim to add a rep or two on ${topWeight}kg before increasing load`;
   }
   return { msg, weightSuggestion, last: ex };
 }
 
-function warmupSuggestion(weight){
-  if(!weight || weight<=0) return null;
+function warmupSuggestion(topWeight){
+  if(!topWeight || topWeight<=0) return null;
   return [
-    {pct:50, reps:10, w:round1(weight*0.5)},
-    {pct:70, reps:5, w:round1(weight*0.7)}
+    {pct:50, reps:10, w:round1(topWeight*0.5)},
+    {pct:70, reps:5, w:round1(topWeight*0.7)}
   ];
 }
 
+function effectiveLoad(setWeight, bwMode){
+  if(bwMode==="weighted") return setWeight + data.bodyweight;
+  if(bwMode==="assisted") return Math.max(0, data.bodyweight - setWeight);
+  return setWeight;
+}
 function computeExerciseVolume(ex){
-  const load = ex.weight + (ex.bw ? data.bodyweight : 0);
-  const totalReps = ex.reps.reduce((a,b)=>a+b,0);
-  return round1(load * totalReps);
+  return round1(ex.sets.reduce((sum,s)=> sum + effectiveLoad(s.weight, ex.bwMode) * s.reps, 0));
+}
+function topWeightOf(ex){
+  return ex.sets.length ? Math.max(...ex.sets.map(s=>s.weight)) : 0;
 }
 
 function renderExerciseList(){
@@ -361,47 +484,69 @@ function renderExerciseList(){
     ex.volume = vol;
     const last = getLastPerformance(ex.name);
     const prog = suggestProgression(ex.name, last);
-    const warm = warmupSuggestion(ex.weight);
+    const top = topWeightOf(ex);
+    const warm = warmupSuggestion(top);
+    const setsSummary = ex.sets.map(s=>`${s.weight}kg×${s.reps}`).join(", ");
+    const collapsed = !!ex.collapsed;
 
     const card = document.createElement("div");
-    card.className = "exercise-card";
+    card.className = "exercise-card" + (collapsed ? " collapsed" : "");
     card.innerHTML = `
-      <div class="ex-head">
-        <div><strong>${escapeHtml(ex.name)}</strong> ${ex.bw?'<span class="pill ok">+BW</span>':''}</div>
-        <button class="badge-close" data-remove="${idx}">✕</button>
+      <div class="ex-head" data-collapse="${idx}">
+        <div>
+          <div><strong>${escapeHtml(ex.name)}</strong> ${ex.bwMode==="weighted"?'<span class="pill ok">+BW</span>':''}${ex.bwMode==="assisted"?'<span class="pill warn">BW−assist</span>':''}</div>
+          <div class="ex-summary">${setsSummary} &middot; Vol: ${vol}kg</div>
+        </div>
+        <div>
+          <span style="margin-right:8px;">${collapsed?'▸':'▾'}</span>
+          <button class="badge-close" data-remove="${idx}">✕</button>
+        </div>
       </div>
-      <div class="muted">${ex.weight}kg${ex.bw?` + ${data.bodyweight}kg BW`:''} × ${ex.reps.join(", ")} reps &middot; Volume: <strong>${vol}kg</strong></div>
-      ${ex.notes ? `<div class="muted">📝 ${escapeHtml(ex.notes)}</div>` : ""}
-      ${warm ? `
-      <div class="collapsible" data-warm="${idx}">
-        <div class="collapsible-head" data-toggle="warm-${idx}">
-          <span>🔥 Warm-up suggestion</span><span>▾</span>
-        </div>
-        <div class="collapsible-body" id="warm-${idx}">
-          ${warm.map(w=>`<div class="muted">${w.pct}% × ${w.reps} reps — ${w.w}kg</div>`).join("")}
-        </div>
-      </div>` : ""}
-      ${prog ? `
-      <div class="collapsible" data-prog="${idx}">
-        <div class="collapsible-head" data-toggle="prog-${idx}">
-          <span>📈 Last session &amp; suggestion</span><span>▾</span>
-        </div>
-        <div class="collapsible-body" id="prog-${idx}">
-          <div class="muted">Last (${prog.last.reps.join(", ")} reps @ ${prog.last.weight}kg): ${escapeHtml(prog.msg)}</div>
-        </div>
-      </div>` : `<div class="muted" style="margin-top:6px;">Target: 3–4 sets × 8–12 reps</div>`}
+      <div class="ex-body">
+        <div class="muted" style="margin-top:6px;">${setsSummary} &middot; Volume: <strong>${vol}kg</strong>${ex.bwMode==="weighted"?` (incl. ${data.bodyweight}kg BW/set)`:''}${ex.bwMode==="assisted"?` (BW ${data.bodyweight}kg − assistance/set)`:''}</div>
+        ${ex.notes ? `<div class="muted">📝 ${escapeHtml(ex.notes)}</div>` : ""}
+        ${warm ? `
+        <div class="collapsible" data-warm="${idx}">
+          <div class="collapsible-head" data-toggle="warm-${idx}">
+            <span>🔥 Warm-up suggestion</span><span>▾</span>
+          </div>
+          <div class="collapsible-body" id="warm-${idx}">
+            ${warm.map(w=>`<div class="muted">${w.pct}% × ${w.reps} reps — ${w.w}kg</div>`).join("")}
+          </div>
+        </div>` : ""}
+        ${prog ? `
+        <div class="collapsible" data-prog="${idx}">
+          <div class="collapsible-head" data-toggle="prog-${idx}">
+            <span>📈 Last session &amp; suggestion</span><span>▾</span>
+          </div>
+          <div class="collapsible-body" id="prog-${idx}">
+            <div class="muted">Last (${last.session.date}): ${prog.last.sets.map(s=>`${s.weight}kg×${s.reps}`).join(", ")}</div>
+            <div class="muted">${escapeHtml(prog.msg)}</div>
+          </div>
+        </div>` : `<div class="muted" style="margin-top:6px;">Target: 3–4 sets × 8–12 reps</div>`}
+      </div>
     `;
     container.appendChild(card);
   });
 
   container.querySelectorAll("[data-remove]").forEach(btn=>{
-    btn.addEventListener("click", ()=>{
+    btn.addEventListener("click", (e)=>{
+      e.stopPropagation();
       currentSession.exercises.splice(parseInt(btn.dataset.remove),1);
       renderSessionView();
     });
   });
+  container.querySelectorAll("[data-collapse]").forEach(head=>{
+    head.addEventListener("click", (e)=>{
+      if(e.target.closest("[data-remove]")) return;
+      const idx = parseInt(head.dataset.collapse);
+      currentSession.exercises[idx].collapsed = !currentSession.exercises[idx].collapsed;
+      renderExerciseList();
+    });
+  });
   container.querySelectorAll("[data-toggle]").forEach(head=>{
-    head.addEventListener("click", ()=>{
+    head.addEventListener("click", (e)=>{
+      e.stopPropagation();
       const id = head.dataset.toggle;
       document.getElementById(id).classList.toggle("open");
     });
@@ -439,8 +584,10 @@ function renderMissingGroups(){
   card.querySelectorAll("[data-quickadd]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       document.getElementById("newExName").value = btn.dataset.quickadd;
+      renderLastSessionCompare();
       document.getElementById("newExName").scrollIntoView({behavior:"smooth", block:"center"});
-      document.getElementById("newExWeight").focus();
+      const firstWeightInput = document.querySelector("#setRows .set-weight");
+      if(firstWeightInput) firstWeightInput.focus();
     });
   });
   document.getElementById("dismissMissing").addEventListener("click", ()=>{ container.innerHTML=""; });
@@ -472,42 +619,42 @@ function escapeHtml(s){
 /* ---------- Add exercise ---------- */
 document.getElementById("addExerciseBtn").addEventListener("click", ()=>{
   const name = document.getElementById("newExName").value.trim();
-  const weight = parseFloat(document.getElementById("newExWeight").value) || 0;
-  const bw = document.getElementById("newExBW").value === "yes";
-  const setsCount = parseInt(document.getElementById("newExSets").value) || 3;
-  const repsRaw = document.getElementById("newExReps").value.trim();
+  const bwModeSelected = document.getElementById("newExBW").value; // "none" | "weighted" | "assisted"
   const notes = document.getElementById("newExNotes").value.trim();
 
   if(!name){ toast("Enter an exercise name"); return; }
 
-  let reps;
-  if(repsRaw){
-    reps = repsRaw.split(",").map(r=>parseInt(r.trim())).filter(n=>!isNaN(n));
-  }
-  if(!reps || !reps.length){
-    reps = Array(setsCount).fill(10);
-  }
+  const sets = [];
+  document.querySelectorAll("#setRows .set-row").forEach(row=>{
+    const w = parseFloat(row.querySelector(".set-weight").value);
+    const r = parseInt(row.querySelector(".set-reps").value);
+    if(!isNaN(w) && !isNaN(r)) sets.push({weight:w, reps:r});
+  });
+  if(!sets.length){ toast("Enter weight & reps for at least one set"); return; }
 
-  // auto-detect bw from library if not explicitly set and library says bw
-  let bwFinal = bw;
-  if(!bwFinal && data.library[name] && data.library[name].bw) bwFinal = true;
+  // if user left the default "No" and the library has a known bwMode for this exercise, use that
+  let bwMode = bwModeSelected;
+  if(bwMode==="none" && data.library[name] && data.library[name].bwMode && data.library[name].bwMode!=="none"){
+    bwMode = data.library[name].bwMode;
+  }
 
   // add to library if unknown
   if(!data.library[name]){
-    data.library[name] = {group:"other", bw:bwFinal};
+    data.library[name] = {group:"other", bwMode};
   }
 
-  currentSession.exercises.push({ name, weight, bw: bwFinal, reps, notes, volume:0 });
+  currentSession.exercises.push({ name, bwMode, sets, notes, volume:0, collapsed:false });
 
   document.getElementById("newExName").value = "";
-  document.getElementById("newExWeight").value = "";
-  document.getElementById("newExBW").value = "no";
-  document.getElementById("newExSets").value = "3";
-  document.getElementById("newExReps").value = "";
+  document.getElementById("newExBW").value = "none";
   document.getElementById("newExNotes").value = "";
+  document.getElementById("lastSessionCompare").innerHTML = "";
+  setRowCount = 3;
+  clearSetRowValues = true;
 
   saveData();
   renderSessionView();
+  toast("Exercise added");
 });
 
 document.getElementById("sessDate").addEventListener("change", e=>{
@@ -552,7 +699,9 @@ document.getElementById("clearSessionBtn").addEventListener("click", ()=>{
 function formatSessionForExport(s){
   let lines = [`Date: ${s.date} | Type: ${s.type||"unknown"}`];
   s.exercises.forEach(ex=>{
-    lines.push(`  - ${ex.name}: ${ex.weight}kg${ex.bw?" +BW":""} × [${ex.reps.join(", ")}] reps | Volume: ${ex.volume||computeExerciseVolume(ex)}kg${ex.notes?` | Notes: ${ex.notes}`:""}`);
+    const setsStr = ex.sets.map(st=>`${st.weight}kg×${st.reps}`).join(", ");
+    const bwTag = ex.bwMode==="weighted" ? " (+BW)" : ex.bwMode==="assisted" ? " (BW−assist)" : "";
+    lines.push(`  - ${ex.name}${bwTag}: [${setsStr}] | Volume: ${ex.volume||computeExerciseVolume(ex)}kg${ex.notes?` | Notes: ${ex.notes}`:""}`);
   });
   return lines.join("\n");
 }
@@ -619,7 +768,10 @@ function renderHistory(){
       <div class="hdr"><span>${s.date} &middot; ${s.type||"—"}</span><span>${grand}kg</span></div>
       <div class="muted">${s.exercises.length} exercise${s.exercises.length!==1?"s":""}</div>
       <div class="hist-detail" id="detail-${s.id}">
-        ${s.exercises.map(ex=>`<div class="total-line"><span>${escapeHtml(ex.name)} — ${ex.weight}kg${ex.bw?" +BW":""} × [${ex.reps.join(", ")}]</span><span>${ex.volume||computeExerciseVolume(ex)}kg</span></div>${ex.notes?`<div class="muted">📝 ${escapeHtml(ex.notes)}</div>`:""}`).join("")}
+        ${s.exercises.map(ex=>{
+          const bwTag = ex.bwMode==="weighted" ? " +BW" : ex.bwMode==="assisted" ? " BW−assist" : "";
+          return `<div class="total-line"><span>${escapeHtml(ex.name)}${bwTag} — [${ex.sets.map(st=>`${st.weight}kg×${st.reps}`).join(", ")}]</span><span>${ex.volume||computeExerciseVolume(ex)}kg</span></div>${ex.notes?`<div class="muted">📝 ${escapeHtml(ex.notes)}</div>`:""}`;
+        }).join("")}
         <div class="btn-row">
           <button class="btn small danger" data-delsession="${s.id}">Delete session</button>
         </div>
