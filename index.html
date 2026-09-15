@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Gym Tracker</title>
+<style>
+  :root{
+    --bg:#0f1115; --bg2:#171a21; --bg3:#1f232c; --border:#2a2f3a;
+    --text:#e8eaed; --text-dim:#9aa1ac; --accent:#5b9dff; --accent-dim:#2c5490;
+    --green:#4caf50; --red:#e05656; --amber:#e0a856;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;}
+  body{padding-bottom:80px;}
+  h1,h2,h3{margin:0 0 8px;}
+  h1{font-size:20px;}
+  h2{font-size:16px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;font-weight:600;}
+  h3{font-size:16px;}
+  button{font-family:inherit;}
+  .app{max-width:640px;margin:0 auto;padding:12px;}
+  header.top{position:sticky;top:0;background:var(--bg);z-index:10;padding:12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);}
+  header.top .sync{font-size:11px;color:var(--text-dim);}
+  header.top .sync.err{color:var(--red);}
+  nav.tabs{display:flex;position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);z-index:20;}
+  nav.tabs button{flex:1;min-height:56px;background:none;border:none;color:var(--text-dim);font-size:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;}
+  nav.tabs button.active{color:var(--accent);}
+  nav.tabs button .ic{font-size:20px;}
+  .view{display:none;}
+  .view.active{display:block;}
+  .card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;}
+  label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;margin-top:10px;}
+  input,select,textarea{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:12px;font-size:16px;min-height:44px;}
+  textarea{min-height:60px;resize:vertical;}
+  .row{display:flex;gap:8px;}
+  .row > *{flex:1;}
+  button.btn{min-height:44px;padding:10px 16px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:15px;cursor:pointer;}
+  button.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+  button.btn.danger{background:transparent;border-color:var(--red);color:var(--red);}
+  button.btn.small{min-height:36px;padding:6px 10px;font-size:13px;}
+  button.btn.ghost{background:transparent;}
+  .btn-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+  .exercise-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;}
+  .exercise-card .ex-head{display:flex;justify-content:space-between;align-items:center;}
+  .set-row{display:flex;gap:6px;align-items:center;margin-top:6px;}
+  .set-row span{font-size:12px;color:var(--text-dim);width:44px;}
+  .pill{display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:3px 10px;font-size:11px;color:var(--text-dim);margin-right:6px;margin-bottom:6px;}
+  .pill.warn{border-color:var(--amber);color:var(--amber);}
+  .pill.ok{border-color:var(--green);color:var(--green);}
+  .muted{color:var(--text-dim);font-size:13px;}
+  .collapsible-head{display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:6px 0;}
+  .collapsible-body{display:none;padding-top:6px;}
+  .collapsible-body.open{display:block;}
+  .hist-item{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;cursor:pointer;}
+  .hist-item .hdr{display:flex;justify-content:space-between;font-weight:600;}
+  .hist-detail{display:none;margin-top:8px;border-top:1px solid var(--border);padding-top:8px;font-size:13px;}
+  .hist-detail.open{display:block;}
+  .suggest-card{border:1px dashed var(--accent-dim);background:rgba(91,157,255,0.06);}
+  .suggest-card .grp{font-weight:600;color:var(--accent);margin-bottom:4px;}
+  .badge-close{background:none;border:none;color:var(--text-dim);font-size:18px;cursor:pointer;padding:4px 8px;}
+  .toast{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border);padding:10px 16px;border-radius:8px;font-size:13px;z-index:100;opacity:0;transition:opacity .2s;pointer-events:none;}
+  .toast.show{opacity:1;}
+  .total-line{display:flex;justify-content:space-between;font-size:14px;padding:4px 0;}
+  .total-line.grand{font-weight:700;font-size:16px;border-top:1px solid var(--border);margin-top:6px;padding-top:8px;}
+  a{color:var(--accent);}
+  .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:flex-end;justify-content:center;}
+  .modal-bg.open{display:flex;}
+  .modal{background:var(--bg2);border-radius:16px 16px 0 0;padding:16px;width:100%;max-width:640px;max-height:85vh;overflow:auto;}
+  .close-x{float:right;background:none;border:none;color:var(--text-dim);font-size:22px;cursor:pointer;}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>🏋 Gym Tracker</h1>
+    <div>
+      <div class="sync" id="syncStatus">not synced</div>
+    </div>
+  </header>
+
+  <!-- SESSION VIEW -->
+  <div class="view active" id="view-session">
+    <div class="card">
+      <label>Date</label>
+      <input type="date" id="sessDate">
+      <label>Session type <span class="muted" id="inferredType"></span></label>
+      <select id="sessType">
+        <option value="">Auto-detect</option>
+        <option value="push">Push</option>
+        <option value="pull">Pull</option>
+        <option value="legs">Legs</option>
+        <option value="upper">Upper</option>
+        <option value="lower">Lower</option>
+        <option value="full">Full Body</option>
+      </select>
+    </div>
+
+    <div id="exerciseList"></div>
+
+    <div class="card">
+      <h3>Add Exercise</h3>
+      <label>Exercise name</label>
+      <input list="exLibList" id="newExName" placeholder="e.g. Pull-up">
+      <datalist id="exLibList"></datalist>
+      <div class="row">
+        <div>
+          <label>Weight (kg)</label>
+          <input type="number" id="newExWeight" inputmode="decimal" placeholder="0">
+        </div>
+        <div>
+          <label>Bodyweight?</label>
+          <select id="newExBW"><option value="no">No</option><option value="yes">Yes, add BW</option></select>
+        </div>
+      </div>
+      <label>Sets × Reps (comma separated reps, e.g. 10,10,8)</label>
+      <div class="row">
+        <input type="number" id="newExSets" placeholder="Sets (3-4)" min="1" value="3">
+        <input type="text" id="newExReps" placeholder="Reps per set e.g. 10,10,8">
+      </div>
+      <label>Notes (optional)</label>
+      <textarea id="newExNotes" placeholder="Notes..."></textarea>
+      <div class="btn-row">
+        <button class="btn primary" id="addExerciseBtn">Add Exercise</button>
+      </div>
+    </div>
+
+    <div id="missingGroupsCard"></div>
+
+    <div class="card">
+      <h3>Session Totals</h3>
+      <div id="sessionTotals" class="muted">No exercises yet.</div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn primary" id="saveSessionBtn">💾 Save Session</button>
+      <button class="btn" id="exportAIBtn">📋 Export for AI</button>
+      <button class="btn danger" id="clearSessionBtn">Clear</button>
+    </div>
+  </div>
+
+  <!-- HISTORY VIEW -->
+  <div class="view" id="view-history">
+    <h2>Session History</h2>
+    <div id="historyList"></div>
+  </div>
+
+  <!-- SETTINGS VIEW -->
+  <div class="view" id="view-settings">
+    <h2>Settings</h2>
+    <div class="card">
+      <label>Bodyweight (kg)</label>
+      <input type="number" id="bodyweightInput" value="69">
+      <div class="btn-row"><button class="btn primary" id="saveBWBtn">Save</button></div>
+    </div>
+    <div class="card">
+      <h3>GitHub Gist Sync</h3>
+      <label>GitHub Personal Access Token</label>
+      <input type="password" id="ghToken" placeholder="ghp_...">
+      <label>Gist ID (leave blank to create new)</label>
+      <input type="text" id="ghGistId" placeholder="gist id">
+      <div class="btn-row">
+        <button class="btn primary" id="saveGhBtn">Save & Sync</button>
+        <button class="btn" id="pullGhBtn">Pull from Gist</button>
+      </div>
+      <p class="muted" id="ghHelp">Data is stored locally always. Gist sync is optional backup/cross-device sync. See README for how to create a token & gist.</p>
+    </div>
+    <div class="card">
+      <h3>Exercise Library</h3>
+      <div id="libraryEditor"></div>
+    </div>
+    <div class="card">
+      <h3>Danger Zone</h3>
+      <button class="btn danger" id="wipeDataBtn">Wipe all local data</button>
+    </div>
+  </div>
+</div>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-view="view-session"><span class="ic">🏋</span>Session</button>
+  <button class="tab-btn" data-view="view-history"><span class="ic">📅</span>History</button>
+  <button class="tab-btn" data-view="view-settings"><span class="ic">⚙️</span>Settings</button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- Data model ---------- */
+const STORAGE_KEY = "gymTrackerData_v1";
+const defaultData = () => ({
+  bodyweight: 69,
+  sessions: [], // {id,date,type,typeManual,exercises:[{name,weight,bw,sets,reps:[..],notes,volume}]}
+  github: { token: "", gistId: "" },
+  lastSync: null,
+  library: defaultLibrary()
+});
+
+function defaultLibrary(){
+  return {
+    "Pull-up": {group:"lats", bw:true},
+    "Lat Pulldown": {group:"lats", bw:false},
+    "Barbell Row": {group:"mid-back", bw:false},
+    "Seated Cable Row": {group:"mid-back", bw:false},
+    "Face Pull": {group:"rear delts", bw:false},
+    "Rear Delt Fly": {group:"rear delts", bw:false},
+    "Barbell Curl": {group:"biceps", bw:false},
+    "Dumbbell Curl": {group:"biceps", bw:false},
+    "Hammer Curl": {group:"brachialis", bw:false},
+    "Bench Press": {group:"chest", bw:false},
+    "Incline Dumbbell Press": {group:"chest", bw:false},
+    "Push-up": {group:"chest", bw:true},
+    "Overhead Press": {group:"front delts", bw:false},
+    "Dumbbell Shoulder Press": {group:"front delts", bw:false},
+    "Tricep Pushdown": {group:"triceps", bw:false},
+    "Overhead Tricep Extension": {group:"triceps", bw:false},
+    "Dip": {group:"triceps", bw:true},
+    "Squat": {group:"quads", bw:false},
+    "Leg Press": {group:"quads", bw:false},
+    "Leg Extension": {group:"quads", bw:false},
+    "Romanian Deadlift": {group:"hamstrings", bw:false},
+    "Leg Curl": {group:"hamstrings", bw:false},
+    "Hip Thrust": {group:"glutes", bw:false},
+    "Glute Bridge": {group:"glutes", bw:false},
+    "Calf Raise": {group:"calves", bw:false}
+  };
+}
+
+const SPLIT_GROUPS = {
+  push: ["chest","front delts","triceps"],
+  pull: ["lats","mid-back","rear delts","biceps","brachialis"],
+  legs: ["quads","hamstrings","glutes","calves"],
+  upper: ["chest","front delts","triceps","lats","mid-back","rear delts","biceps","brachialis"],
+  lower: ["quads","hamstrings","glutes","calves"],
+  full: ["chest","front delts","triceps","lats","mid-back","rear delts","biceps","brachialis","quads","hamstrings","glutes","calves"]
+};
+
+let data = loadData();
+let currentSession = null; // in-progress session object
+
+function loadData(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return defaultData();
+    const parsed = JSON.parse(raw);
+    return Object.assign(defaultData(), parsed, {library: Object.assign(defaultLibrary(), parsed.library||{})});
+  }catch(e){ return defaultData(); }
+}
+function saveData(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }catch(e){
+    console.warn("Could not save to localStorage:", e);
+  }
+}
+
+/* ---------- Utilities ---------- */
+function todayStr(){
+  const d = new Date();
+  return d.toISOString().slice(0,10);
+}
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>t.classList.remove("show"), 2200);
+}
+function round1(n){ return Math.round(n*10)/10; }
+
+/* ---------- Session state init ---------- */
+function newEmptySession(){
+  return { id: "s"+Date.now(), date: todayStr(), type: "", typeManual: false, exercises: [] };
+}
+currentSession = newEmptySession();
+
+/* ---------- Split inference ---------- */
+function inferSessionType(exercises){
+  if(!exercises.length) return "";
+  const counts = {};
+  exercises.forEach(ex=>{
+    const meta = data.library[ex.name];
+    if(!meta) return;
+    const grp = meta.group;
+    for(const [split, groups] of Object.entries(SPLIT_GROUPS)){
+      if(split==="upper"||split==="full") continue;
+      if(groups.includes(grp)) counts[split] = (counts[split]||0)+1;
+    }
+  });
+  let best = "", bestCount = 0;
+  for(const [k,v] of Object.entries(counts)){ if(v>bestCount){best=k;bestCount=v;} }
+  // detect upper vs push/pull mix
+  const hasPush = counts.push>0, hasPull = counts.pull>0, hasLegs = counts.legs>0;
+  if(hasPush && hasPull && !hasLegs) return "upper";
+  if(hasLegs && (hasPush||hasPull)) return "full";
+  return best;
+}
+
+/* ---------- Rendering: Session view ---------- */
+function renderSessionView(){
+  document.getElementById("sessDate").value = currentSession.date;
+  document.getElementById("sessType").value = currentSession.typeManual ? currentSession.type : "";
+  const inferred = inferSessionType(currentSession.exercises);
+  document.getElementById("inferredType").textContent = currentSession.typeManual ? "" : (inferred ? `(inferred: ${inferred})` : "");
+  if(!currentSession.typeManual) currentSession.type = inferred;
+
+  renderExerciseList();
+  renderMissingGroups();
+  renderSessionTotals();
+  renderExLibraryDatalist();
+}
+
+function getLastPerformance(exName){
+  for(let i=data.sessions.length-1;i>=0;i--){
+    const s = data.sessions[i];
+    const ex = s.exercises.find(e=>e.name.toLowerCase()===exName.toLowerCase());
+    if(ex) return {session:s, ex};
+  }
+  return null;
+}
+
+function suggestProgression(exName, lastPerf){
+  if(!lastPerf) return null;
+  const ex = lastPerf.ex;
+  const allHit12 = ex.reps.every(r=>r>=12);
+  const failedBelow8 = ex.reps.some(r=>r<8);
+  let msg, weightSuggestion;
+  if(allHit12){
+    weightSuggestion = round1(ex.weight * 1.05);
+    msg = `All sets hit 12 reps last time — try bumping weight to ~${weightSuggestion}kg`;
+  } else if(failedBelow8){
+    weightSuggestion = round1(ex.weight * 0.9);
+    msg = `Missed 8 reps on a set last time — consider dropping to ~${weightSuggestion}kg or keep reps focus`;
+  } else {
+    weightSuggestion = ex.weight;
+    msg = `Aim to add a rep or two on ${ex.weight}kg before increasing load`;
+  }
+  return { msg, weightSuggestion, last: ex };
+}
+
+function warmupSuggestion(weight){
+  if(!weight || weight<=0) return null;
+  return [
+    {pct:50, reps:10, w:round1(weight*0.5)},
+    {pct:70, reps:5, w:round1(weight*0.7)}
+  ];
+}
+
+function computeExerciseVolume(ex){
+  const load = ex.weight + (ex.bw ? data.bodyweight : 0);
+  const totalReps = ex.reps.reduce((a,b)=>a+b,0);
+  return round1(load * totalReps);
+}
+
+function renderExerciseList(){
+  const container = document.getElementById("exerciseList");
+  container.innerHTML = "";
+  currentSession.exercises.forEach((ex, idx)=>{
+    const vol = computeExerciseVolume(ex);
+    ex.volume = vol;
+    const last = getLastPerformance(ex.name);
+    const prog = suggestProgression(ex.name, last);
+    const warm = warmupSuggestion(ex.weight);
+
+    const card = document.createElement("div");
+    card.className = "exercise-card";
+    card.innerHTML = `
+      <div class="ex-head">
+        <div><strong>${escapeHtml(ex.name)}</strong> ${ex.bw?'<span class="pill ok">+BW</span>':''}</div>
+        <button class="badge-close" data-remove="${idx}">✕</button>
+      </div>
+      <div class="muted">${ex.weight}kg${ex.bw?` + ${data.bodyweight}kg BW`:''} × ${ex.reps.join(", ")} reps &middot; Volume: <strong>${vol}kg</strong></div>
+      ${ex.notes ? `<div class="muted">📝 ${escapeHtml(ex.notes)}</div>` : ""}
+      ${warm ? `
+      <div class="collapsible" data-warm="${idx}">
+        <div class="collapsible-head" data-toggle="warm-${idx}">
+          <span>🔥 Warm-up suggestion</span><span>▾</span>
+        </div>
+        <div class="collapsible-body" id="warm-${idx}">
+          ${warm.map(w=>`<div class="muted">${w.pct}% × ${w.reps} reps — ${w.w}kg</div>`).join("")}
+        </div>
+      </div>` : ""}
+      ${prog ? `
+      <div class="collapsible" data-prog="${idx}">
+        <div class="collapsible-head" data-toggle="prog-${idx}">
+          <span>📈 Last session &amp; suggestion</span><span>▾</span>
+        </div>
+        <div class="collapsible-body" id="prog-${idx}">
+          <div class="muted">Last (${prog.last.reps.join(", ")} reps @ ${prog.last.weight}kg): ${escapeHtml(prog.msg)}</div>
+        </div>
+      </div>` : `<div class="muted" style="margin-top:6px;">Target: 3–4 sets × 8–12 reps</div>`}
+    `;
+    container.appendChild(card);
+  });
+
+  container.querySelectorAll("[data-remove]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      currentSession.exercises.splice(parseInt(btn.dataset.remove),1);
+      renderSessionView();
+    });
+  });
+  container.querySelectorAll("[data-toggle]").forEach(head=>{
+    head.addEventListener("click", ()=>{
+      const id = head.dataset.toggle;
+      document.getElementById(id).classList.toggle("open");
+    });
+  });
+}
+
+function renderMissingGroups(){
+  const container = document.getElementById("missingGroupsCard");
+  container.innerHTML = "";
+  const type = currentSession.type;
+  if(!type || !SPLIT_GROUPS[type] || !currentSession.exercises.length){ return; }
+  const expected = SPLIT_GROUPS[type];
+  const hitGroups = new Set();
+  currentSession.exercises.forEach(ex=>{
+    const meta = data.library[ex.name];
+    if(meta) hitGroups.add(meta.group);
+  });
+  const missing = expected.filter(g=>!hitGroups.has(g));
+  if(!missing.length) return;
+
+  const card = document.createElement("div");
+  card.className = "card suggest-card";
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;"><h3 style="margin:0;">Missing muscle groups</h3><button class="badge-close" id="dismissMissing">✕</button></div>`;
+  missing.forEach(grp=>{
+    const options = Object.entries(data.library).filter(([n,m])=>m.group===grp).map(([n])=>n).slice(0,2);
+    html += `<div style="margin-top:8px;"><div class="grp">${grp}</div>`;
+    options.forEach(name=>{
+      html += `<button class="btn small" data-quickadd="${escapeHtml(name)}" style="margin-right:6px;margin-bottom:6px;">+ ${escapeHtml(name)}</button>`;
+    });
+    html += `</div>`;
+  });
+  card.innerHTML = html;
+  container.appendChild(card);
+
+  card.querySelectorAll("[data-quickadd]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      document.getElementById("newExName").value = btn.dataset.quickadd;
+      document.getElementById("newExName").scrollIntoView({behavior:"smooth", block:"center"});
+      document.getElementById("newExWeight").focus();
+    });
+  });
+  document.getElementById("dismissMissing").addEventListener("click", ()=>{ container.innerHTML=""; });
+}
+
+function renderSessionTotals(){
+  const el = document.getElementById("sessionTotals");
+  if(!currentSession.exercises.length){ el.textContent = "No exercises yet."; return; }
+  let html = "";
+  let grand = 0;
+  currentSession.exercises.forEach(ex=>{
+    const v = computeExerciseVolume(ex);
+    grand += v;
+    html += `<div class="total-line"><span>${escapeHtml(ex.name)}</span><span>${v}kg</span></div>`;
+  });
+  html += `<div class="total-line grand"><span>Session Total</span><span>${round1(grand)}kg</span></div>`;
+  el.innerHTML = html;
+}
+
+function renderExLibraryDatalist(){
+  const dl = document.getElementById("exLibList");
+  dl.innerHTML = Object.keys(data.library).map(n=>`<option value="${escapeHtml(n)}">`).join("");
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+/* ---------- Add exercise ---------- */
+document.getElementById("addExerciseBtn").addEventListener("click", ()=>{
+  const name = document.getElementById("newExName").value.trim();
+  const weight = parseFloat(document.getElementById("newExWeight").value) || 0;
+  const bw = document.getElementById("newExBW").value === "yes";
+  const setsCount = parseInt(document.getElementById("newExSets").value) || 3;
+  const repsRaw = document.getElementById("newExReps").value.trim();
+  const notes = document.getElementById("newExNotes").value.trim();
+
+  if(!name){ toast("Enter an exercise name"); return; }
+
+  let reps;
+  if(repsRaw){
+    reps = repsRaw.split(",").map(r=>parseInt(r.trim())).filter(n=>!isNaN(n));
+  }
+  if(!reps || !reps.length){
+    reps = Array(setsCount).fill(10);
+  }
+
+  // auto-detect bw from library if not explicitly set and library says bw
+  let bwFinal = bw;
+  if(!bwFinal && data.library[name] && data.library[name].bw) bwFinal = true;
+
+  // add to library if unknown
+  if(!data.library[name]){
+    data.library[name] = {group:"other", bw:bwFinal};
+  }
+
+  currentSession.exercises.push({ name, weight, bw: bwFinal, reps, notes, volume:0 });
+
+  document.getElementById("newExName").value = "";
+  document.getElementById("newExWeight").value = "";
+  document.getElementById("newExBW").value = "no";
+  document.getElementById("newExSets").value = "3";
+  document.getElementById("newExReps").value = "";
+  document.getElementById("newExNotes").value = "";
+
+  saveData();
+  renderSessionView();
+});
+
+document.getElementById("sessDate").addEventListener("change", e=>{
+  currentSession.date = e.target.value;
+});
+document.getElementById("sessType").addEventListener("change", e=>{
+  if(e.target.value){
+    currentSession.type = e.target.value;
+    currentSession.typeManual = true;
+  } else {
+    currentSession.typeManual = false;
+    currentSession.type = inferSessionType(currentSession.exercises);
+  }
+  renderSessionView();
+});
+
+/* ---------- Save / Clear session ---------- */
+document.getElementById("saveSessionBtn").addEventListener("click", ()=>{
+  if(!currentSession.exercises.length){ toast("Add at least one exercise first"); return; }
+  const existingIdx = data.sessions.findIndex(s=>s.id===currentSession.id);
+  const toSave = JSON.parse(JSON.stringify(currentSession));
+  toSave.exercises.forEach(ex=> ex.volume = computeExerciseVolume(ex));
+  if(existingIdx>=0) data.sessions[existingIdx] = toSave;
+  else data.sessions.push(toSave);
+  data.sessions.sort((a,b)=> a.date.localeCompare(b.date));
+  saveData();
+  toast("Session saved");
+  syncToGist();
+  currentSession = newEmptySession();
+  renderSessionView();
+  renderHistory();
+});
+
+document.getElementById("clearSessionBtn").addEventListener("click", ()=>{
+  if(confirm("Clear current session data?")){
+    currentSession = newEmptySession();
+    renderSessionView();
+  }
+});
+
+/* ---------- Export for AI ---------- */
+function formatSessionForExport(s){
+  let lines = [`Date: ${s.date} | Type: ${s.type||"unknown"}`];
+  s.exercises.forEach(ex=>{
+    lines.push(`  - ${ex.name}: ${ex.weight}kg${ex.bw?" +BW":""} × [${ex.reps.join(", ")}] reps | Volume: ${ex.volume||computeExerciseVolume(ex)}kg${ex.notes?` | Notes: ${ex.notes}`:""}`);
+  });
+  return lines.join("\n");
+}
+
+document.getElementById("exportAIBtn").addEventListener("click", async ()=>{
+  const history = data.sessions.slice(-4);
+  const todaysData = JSON.parse(JSON.stringify(currentSession));
+  todaysData.exercises.forEach(ex=> ex.volume = computeExerciseVolume(ex));
+
+  // missing groups / suggestions not added
+  let suggestionLines = [];
+  const type = currentSession.type;
+  if(type && SPLIT_GROUPS[type]){
+    const hitGroups = new Set(currentSession.exercises.map(ex=> data.library[ex.name] && data.library[ex.name].group).filter(Boolean));
+    const missing = SPLIT_GROUPS[type].filter(g=>!hitGroups.has(g));
+    missing.forEach(grp=>{
+      const opts = Object.entries(data.library).filter(([n,m])=>m.group===grp).map(([n])=>n).slice(0,2);
+      if(opts.length) suggestionLines.push(`${grp}: ${opts.join(", ")}`);
+    });
+  }
+
+  const block = `You are a strength and body recomposition coach. Analyze the following workout data and provide:
+1. Progressive overload recommendations for each exercise (increase weight, reps, or sets)
+2. Whether the session volume and intensity is appropriate for body recomposition (BW: ${data.bodyweight} kg)
+3. Any muscle groups that appear undertrained based on session history
+4. Suggested exercises to add or swap based on the data below
+5. Assessment of the inferred training split pattern and whether frequency is optimal
+
+--- SESSION HISTORY ---
+${history.length ? history.map(formatSessionForExport).join("\n") : "(no prior sessions)"}
+
+--- TODAY'S SESSION ---
+${formatSessionForExport(todaysData)}
+
+--- EXERCISE LIBRARY SUGGESTIONS ---
+${suggestionLines.length ? suggestionLines.join("\n") : "(none — all expected muscle groups covered)"}`;
+
+  try{
+    await navigator.clipboard.writeText(block);
+    toast("Copied to clipboard!");
+  }catch(e){
+    // fallback
+    const ta = document.createElement("textarea");
+    ta.value = block;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    toast("Copied to clipboard!");
+  }
+});
+
+/* ---------- History view ---------- */
+function renderHistory(){
+  const container = document.getElementById("historyList");
+  container.innerHTML = "";
+  if(!data.sessions.length){ container.innerHTML = `<p class="muted">No sessions yet.</p>`; return; }
+  const sorted = [...data.sessions].sort((a,b)=> b.date.localeCompare(a.date));
+  sorted.forEach(s=>{
+    const grand = round1(s.exercises.reduce((a,ex)=>a+(ex.volume||computeExerciseVolume(ex)),0));
+    const item = document.createElement("div");
+    item.className = "hist-item";
+    item.innerHTML = `
+      <div class="hdr"><span>${s.date} &middot; ${s.type||"—"}</span><span>${grand}kg</span></div>
+      <div class="muted">${s.exercises.length} exercise${s.exercises.length!==1?"s":""}</div>
+      <div class="hist-detail" id="detail-${s.id}">
+        ${s.exercises.map(ex=>`<div class="total-line"><span>${escapeHtml(ex.name)} — ${ex.weight}kg${ex.bw?" +BW":""} × [${ex.reps.join(", ")}]</span><span>${ex.volume||computeExerciseVolume(ex)}kg</span></div>${ex.notes?`<div class="muted">📝 ${escapeHtml(ex.notes)}</div>`:""}`).join("")}
+        <div class="btn-row">
+          <button class="btn small danger" data-delsession="${s.id}">Delete session</button>
+        </div>
+      </div>
+    `;
+    item.querySelector(".hdr").addEventListener("click", ()=>{
+      document.getElementById(`detail-${s.id}`).classList.toggle("open");
+    });
+    container.appendChild(item);
+  });
+  container.querySelectorAll("[data-delsession]").forEach(btn=>{
+    btn.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      if(confirm("Delete this session?")){
+        data.sessions = data.sessions.filter(s=>s.id!==btn.dataset.delsession);
+        saveData();
+        syncToGist();
+        renderHistory();
+      }
+    });
+  });
+}
+
+/* ---------- Settings view ---------- */
+function renderSettings(){
+  document.getElementById("bodyweightInput").value = data.bodyweight;
+  document.getElementById("ghToken").value = data.github.token || "";
+  document.getElementById("ghGistId").value = data.github.gistId || "";
+  renderLibraryEditor();
+}
+
+document.getElementById("saveBWBtn").addEventListener("click", ()=>{
+  const bw = parseFloat(document.getElementById("bodyweightInput").value);
+  if(bw>0){ data.bodyweight = bw; saveData(); toast("Bodyweight saved"); renderSessionView(); }
+});
+
+function renderLibraryEditor(){
+  const el = document.getElementById("libraryEditor");
+  const groups = {};
+  Object.entries(data.library).forEach(([name,meta])=>{
+    groups[meta.group] = groups[meta.group]||[];
+    groups[meta.group].push(name);
+  });
+  let html = "";
+  Object.entries(groups).forEach(([grp,names])=>{
+    html += `<div style="margin-bottom:8px;"><strong>${escapeHtml(grp)}</strong><br>` + names.map(n=>`<span class="pill">${escapeHtml(n)}</span>`).join("") + `</div>`;
+  });
+  el.innerHTML = html || `<p class="muted">No exercises yet.</p>`;
+}
+
+document.getElementById("wipeDataBtn").addEventListener("click", ()=>{
+  if(confirm("This will permanently erase all local workout data. Continue?")){
+    localStorage.removeItem(STORAGE_KEY);
+    data = defaultData();
+    currentSession = newEmptySession();
+    renderAll();
+    toast("Local data wiped");
+  }
+});
+
+/* ---------- GitHub Gist sync ---------- */
+function setSyncStatus(msg, isErr){
+  const el = document.getElementById("syncStatus");
+  el.textContent = msg;
+  el.classList.toggle("err", !!isErr);
+}
+
+async function syncToGist(){
+  if(!data.github.token) { setSyncStatus("not synced"); return; }
+  setSyncStatus("syncing...");
+  try{
+    const payload = {
+      description: "gym-tracker data",
+      files: { "gym-tracker.json": { content: JSON.stringify({bodyweight:data.bodyweight, sessions:data.sessions, library:data.library}, null, 2) } }
+    };
+    let url = "https://api.github.com/gists";
+    let method = "POST";
+    if(data.github.gistId){
+      url += "/" + data.github.gistId;
+      method = "PATCH";
+    }
+    const res = await fetch(url, {
+      method,
+      headers: {
+        "Authorization": "token " + data.github.token,
+        "Accept": "application/vnd.github+json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const json = await res.json();
+    if(!data.github.gistId){ data.github.gistId = json.id; document.getElementById("ghGistId").value = json.id; }
+    data.lastSync = new Date().toISOString();
+    saveData();
+    setSyncStatus("synced " + new Date(data.lastSync).toLocaleTimeString());
+  }catch(e){
+    setSyncStatus("sync error: " + e.message, true);
+  }
+}
+
+async function pullFromGist(){
+  if(!data.github.token || !data.github.gistId){ toast("Enter token & gist ID first"); return; }
+  setSyncStatus("pulling...");
+  try{
+    const res = await fetch("https://api.github.com/gists/"+data.github.gistId, {
+      headers: { "Authorization": "token " + data.github.token, "Accept": "application/vnd.github+json" }
+    });
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const json = await res.json();
+    const file = json.files["gym-tracker.json"];
+    if(!file) throw new Error("gym-tracker.json not found in gist");
+    const remote = JSON.parse(file.content);
+    data.bodyweight = remote.bodyweight ?? data.bodyweight;
+    data.sessions = remote.sessions || [];
+    data.library = Object.assign(defaultLibrary(), remote.library||{});
+    saveData();
+    renderAll();
+    data.lastSync = new Date().toISOString();
+    setSyncStatus("synced " + new Date(data.lastSync).toLocaleTimeString());
+    toast("Pulled from Gist");
+  }catch(e){
+    setSyncStatus("pull error: " + e.message, true);
+  }
+}
+
+document.getElementById("saveGhBtn").addEventListener("click", ()=>{
+  data.github.token = document.getElementById("ghToken").value.trim();
+  data.github.gistId = document.getElementById("ghGistId").value.trim();
+  saveData();
+  syncToGist();
+});
+document.getElementById("pullGhBtn").addEventListener("click", pullFromGist);
+
+/* ---------- Tabs ---------- */
+document.querySelectorAll(".tab-btn").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+    document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById(btn.dataset.view).classList.add("active");
+    if(btn.dataset.view==="view-history") renderHistory();
+    if(btn.dataset.view==="view-settings") renderSettings();
+  });
+});
+
+/* ---------- Init ---------- */
+function renderAll(){
+  renderSessionView();
+  renderHistory();
+  renderSettings();
+}
+
+// try initial pull if configured
+if(data.github.token && data.github.gistId){
+  pullFromGist();
+}
+
+renderAll();
+
+})();
+</script>
+</body>
+</html>
