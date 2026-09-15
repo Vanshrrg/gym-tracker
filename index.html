@@ -437,6 +437,18 @@ function renderSetRows(){
     container.appendChild(row);
   }
   updateSetRowHints();
+
+  // typing a weight in Set 1 prefills the same weight into any still-empty later sets
+  const firstWeightInput = container.querySelector(".set-row:first-child .set-weight");
+  if(firstWeightInput){
+    firstWeightInput.addEventListener("input", ()=>{
+      const val = firstWeightInput.value;
+      if(val === "") return;
+      container.querySelectorAll(".set-row:not(:first-child) .set-weight").forEach(inp=>{
+        if(inp.value === "") inp.value = val;
+      });
+    });
+  }
 }
 document.getElementById("addSetRowBtn").addEventListener("click", ()=>{
   if(setRowCount<MAX_SETS){ setRowCount++; renderSetRows(); }
