@@ -252,20 +252,35 @@ function defaultLibrary(){
     "Leg Curl": {group:"hamstrings", bwMode:"none"},
     "Hip Thrust": {group:"glutes", bwMode:"none"},
     "Glute Bridge": {group:"glutes", bwMode:"none"},
-    "Calf Raise": {group:"calves", bwMode:"none"}
+    "Calf Raise": {group:"calves", bwMode:"none"},
+    "Preacher Curl": {group:"biceps", bwMode:"none"},
+    "Back Extension Machine": {group:"lower back", bwMode:"none"}
   };
+}
+
+// Different gym names for the same movement — resolved to one canonical library entry
+// so history/progression/suggestions all treat them as the same exercise.
+const EXERCISE_ALIASES = {
+  "Reverse Fly": "Rear Delt Fly",
+  "Rear Delt Machine Fly": "Rear Delt Fly",
+  "Machine Reverse Fly": "Rear Delt Fly"
+};
+const ALIAS_LOOKUP = Object.fromEntries(Object.entries(EXERCISE_ALIASES).map(([k,v])=>[k.toLowerCase(), v]));
+function resolveExerciseName(name){
+  const trimmed = (name||"").trim();
+  return ALIAS_LOOKUP[trimmed.toLowerCase()] || trimmed;
 }
 
 const SPLIT_GROUPS = {
   push: ["chest","front delts","triceps"],
-  pull: ["lats","mid-back","rear delts","biceps","brachialis"],
+  pull: ["lats","mid-back","rear delts","biceps","brachialis","lower back"],
   legs: ["quads","hamstrings","glutes","calves"],
-  upper: ["chest","front delts","triceps","lats","mid-back","rear delts","biceps","brachialis"],
+  upper: ["chest","front delts","triceps","lats","mid-back","rear delts","biceps","brachialis","lower back"],
   lower: ["quads","hamstrings","glutes","calves"],
-  full: ["chest","front delts","triceps","lats","mid-back","rear delts","biceps","brachialis","quads","hamstrings","glutes","calves"]
+  full: ["chest","front delts","triceps","lats","mid-back","rear delts","biceps","brachialis","lower back","quads","hamstrings","glutes","calves"]
 };
 
-const ALL_GROUPS = ["lats","mid-back","rear delts","biceps","brachialis","chest","front delts","triceps","quads","hamstrings","glutes","calves"];
+const ALL_GROUPS = ["lats","mid-back","rear delts","biceps","brachialis","lower back","chest","front delts","triceps","quads","hamstrings","glutes","calves"];
 
 let data = loadData();
 let currentSession = null; // in-progress session object
@@ -458,7 +473,7 @@ document.getElementById("removeSetRowBtn").addEventListener("click", ()=>{
 });
 
 function updateSetRowHints(){
-  const name = document.getElementById("newExName").value.trim();
+  const name = resolveExerciseName(document.getElementById("newExName").value.trim());
   const last = name ? getLastPerformance(name) : null;
   document.querySelectorAll(".last-set-hint").forEach(el=>{
     const idx = parseInt(el.dataset.hint);
@@ -473,18 +488,21 @@ function updateSetRowHints(){
 
 function renderLastSessionCompare(){
   const box = document.getElementById("lastSessionCompare");
-  const name = document.getElementById("newExName").value.trim();
-  if(!name){ box.innerHTML = ""; return; }
+  const rawName = document.getElementById("newExName").value.trim();
+  if(!rawName){ box.innerHTML = ""; return; }
+  const name = resolveExerciseName(rawName);
+  const aliasNote = name.toLowerCase()!==rawName.toLowerCase() ? `<div class="muted">Tracked as "${escapeHtml(name)}"</div>` : "";
 
   const bwSelect = document.getElementById("newExBW");
   if(data.library[name] && data.library[name].bwMode){
     bwSelect.value = data.library[name].bwMode;
   }
   const last = getLastPerformance(name);
-  if(!last){ box.innerHTML = `<p class="muted" style="margin-top:6px;">No history yet for "${escapeHtml(name)}" — this will be the baseline.</p>`; return; }
+  if(!last){ box.innerHTML = `${aliasNote}<p class="muted" style="margin-top:6px;">No history yet for "${escapeHtml(name)}" — this will be the baseline.</p>`; return; }
   const prog = suggestProgression(name, last);
   const setsStr = last.ex.sets.map(s=>`${s.weight}kg×${s.reps}`).join(", ");
   box.innerHTML = `
+    ${aliasNote}
     <div class="card suggest-card" style="margin-top:6px;padding:10px;">
       <div class="muted">Last time (${last.session.date}): ${setsStr}</div>
       ${prog ? `<div style="margin-top:4px;">📈 ${escapeHtml(prog.msg)}</div>
@@ -678,7 +696,8 @@ function renderSessionTotals(){
 
 function renderExLibraryDatalist(){
   const dl = document.getElementById("exLibList");
-  dl.innerHTML = Object.keys(data.library).map(n=>`<option value="${escapeHtml(n)}">`).join("");
+  const names = new Set([...Object.keys(data.library), ...Object.keys(EXERCISE_ALIASES)]);
+  dl.innerHTML = Array.from(names).map(n=>`<option value="${escapeHtml(n)}">`).join("");
 }
 
 function escapeHtml(s){
@@ -687,7 +706,8 @@ function escapeHtml(s){
 
 /* ---------- Add exercise ---------- */
 document.getElementById("addExerciseBtn").addEventListener("click", ()=>{
-  const name = document.getElementById("newExName").value.trim();
+  const rawName = document.getElementById("newExName").value.trim();
+  const name = resolveExerciseName(rawName);
   const bwModeSelected = document.getElementById("newExBW").value; // "none" | "weighted" | "assisted"
   const notes = document.getElementById("newExNotes").value.trim();
 
@@ -831,17 +851,21 @@ function renderHistory(){
   const sorted = [...data.sessions].sort((a,b)=> b.date.localeCompare(a.date));
   sorted.forEach(s=>{
     const grand = round1(s.exercises.reduce((a,ex)=>a+(ex.volume||computeExerciseVolume(ex)),0));
+    const groupsHit = Array.from(getGroupsHit(s.exercises));
     const item = document.createElement("div");
     item.className = "hist-item";
     item.innerHTML = `
       <div class="hdr"><span>${s.date} &middot; ${s.type||"—"}</span><span>${grand}kg</span></div>
-      <div class="muted">${s.exercises.length} exercise${s.exercises.length!==1?"s":""}</div>
+      <div class="muted">${s.exercises.length} exercise${s.exercises.length!==1?"s":""} &middot; ${groupsHit.length ? escapeHtml(groupsHit.join(", ")) : "—"}</div>
       <div class="hist-detail" id="detail-${s.id}">
         ${s.exercises.map(ex=>{
           const bwTag = ex.bwMode==="weighted" ? " +BW" : ex.bwMode==="assisted" ? " BW−assist" : "";
-          return `<div class="total-line"><span>${escapeHtml(ex.name)}${bwTag} — [${ex.sets.map(st=>`${st.weight}kg×${st.reps}`).join(", ")}]</span><span>${ex.volume||computeExerciseVolume(ex)}kg</span></div>${ex.notes?`<div class="muted">📝 ${escapeHtml(ex.notes)}</div>`:""}`;
+          const meta = data.library[ex.name];
+          const groupTag = meta && meta.group ? ` <span class="muted">(${escapeHtml(meta.group)})</span>` : "";
+          return `<div class="total-line"><span>${escapeHtml(ex.name)}${groupTag}${bwTag} — [${ex.sets.map(st=>`${st.weight}kg×${st.reps}`).join(", ")}]</span><span>${ex.volume||computeExerciseVolume(ex)}kg</span></div>${ex.notes?`<div class="muted">📝 ${escapeHtml(ex.notes)}</div>`:""}`;
         }).join("")}
         <div class="btn-row">
+          <button class="btn small" data-editsession="${s.id}">✏️ Edit session</button>
           <button class="btn small danger" data-delsession="${s.id}">Delete session</button>
         </div>
       </div>
@@ -862,6 +886,22 @@ function renderHistory(){
       }
     });
   });
+  container.querySelectorAll("[data-editsession]").forEach(btn=>{
+    btn.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      editSession(btn.dataset.editsession);
+    });
+  });
+}
+
+function editSession(id){
+  const s = data.sessions.find(x=>x.id===id);
+  if(!s) return;
+  if(currentSession.exercises.length && !confirm("This will replace your current unsaved session in progress. Continue?")) return;
+  currentSession = JSON.parse(JSON.stringify(s));
+  document.querySelector('.tab-btn[data-view="view-session"]').click();
+  renderSessionView();
+  toast(`Editing session from ${s.date} — Save to update`);
 }
 
 /* ---------- Coverage view ---------- */
