@@ -51,6 +51,8 @@
   .pill{display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:3px 10px;font-size:11px;color:var(--text-dim);margin-right:6px;margin-bottom:6px;}
   .pill.warn{border-color:var(--amber);color:var(--amber);}
   .pill.ok{border-color:var(--green);color:var(--green);}
+  .group-grid{display:flex;flex-wrap:wrap;}
+  .group-grid .pill{font-size:12px;padding:6px 12px;}
   .muted{color:var(--text-dim);font-size:13px;}
   .collapsible-head{display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:6px 0;}
   .collapsible-body{display:none;padding-top:6px;}
@@ -150,6 +152,24 @@
     <div id="historyList"></div>
   </div>
 
+  <!-- COVERAGE VIEW -->
+  <div class="view" id="view-coverage">
+    <h2>This Week</h2>
+    <div class="card">
+      <div class="muted" id="weekRangeLabel"></div>
+      <div class="group-grid" id="weekGroupGrid" style="margin-top:8px;"></div>
+      <div class="muted" id="weekCoverageCount" style="margin-top:6px;"></div>
+    </div>
+    <div id="weekMissingCard"></div>
+
+    <h2>Current Session</h2>
+    <div class="card">
+      <div class="group-grid" id="sessionGroupGrid"></div>
+      <div class="muted" id="sessionCoverageCount" style="margin-top:6px;"></div>
+    </div>
+    <div id="sessionMissingCard"></div>
+  </div>
+
   <!-- SETTINGS VIEW -->
   <div class="view" id="view-settings">
     <h2>Settings</h2>
@@ -184,6 +204,7 @@
 <nav class="tabs">
   <button class="tab-btn active" data-view="view-session"><span class="ic">🏋</span>Session</button>
   <button class="tab-btn" data-view="view-history"><span class="ic">📅</span>History</button>
+  <button class="tab-btn" data-view="view-coverage"><span class="ic">🎯</span>Coverage</button>
   <button class="tab-btn" data-view="view-settings"><span class="ic">⚙️</span>Settings</button>
 </nav>
 
@@ -243,6 +264,8 @@ const SPLIT_GROUPS = {
   lower: ["quads","hamstrings","glutes","calves"],
   full: ["chest","front delts","triceps","lats","mid-back","rear delts","biceps","brachialis","quads","hamstrings","glutes","calves"]
 };
+
+const ALL_GROUPS = ["lats","mid-back","rear delts","biceps","brachialis","chest","front delts","triceps","quads","hamstrings","glutes","calves"];
 
 let data = loadData();
 let currentSession = null; // in-progress session object
@@ -332,6 +355,46 @@ function inferSessionType(exercises){
   if(hasPush && hasPull && !hasLegs) return "upper";
   if(hasLegs && (hasPush||hasPull)) return "full";
   return best;
+}
+
+/* ---------- Coverage helpers (weekly / per-session muscle group tracking) ---------- */
+function getWeekRange(dateStr){
+  const d = new Date((dateStr || todayStr()) + "T00:00:00");
+  const day = d.getDay(); // 0=Sun..6=Sat
+  const diffToMonday = (day === 0) ? -6 : (1 - day);
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + diffToMonday);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const fmt = x => x.toISOString().slice(0,10);
+  return { start: fmt(monday), end: fmt(sunday) };
+}
+function getGroupsHit(exercises){
+  const hit = new Set();
+  (exercises||[]).forEach(ex=>{
+    const meta = data.library[ex.name];
+    if(meta && meta.group) hit.add(meta.group);
+  });
+  return hit;
+}
+function getSessionsInRange(start, end){
+  const sessions = data.sessions.filter(s=> s.date >= start && s.date <= end);
+  if(currentSession.date >= start && currentSession.date <= end && currentSession.exercises.length){
+    sessions.push(currentSession);
+  }
+  return sessions;
+}
+function suggestExercisesForGroup(grp, n){
+  n = n || 2;
+  return Object.entries(data.library).filter(([name,m])=>m.group===grp).map(([name])=>name).slice(0,n);
+}
+function goAddExercise(name){
+  document.querySelector('.tab-btn[data-view="view-session"]').click();
+  document.getElementById("newExName").value = name;
+  renderLastSessionCompare();
+  document.getElementById("newExName").scrollIntoView({behavior:"smooth", block:"center"});
+  const firstWeightInput = document.querySelector("#setRows .set-weight");
+  if(firstWeightInput) firstWeightInput.focus();
 }
 
 /* ---------- Rendering: Session view ---------- */
@@ -571,7 +634,7 @@ function renderMissingGroups(){
   card.className = "card suggest-card";
   let html = `<div style="display:flex;justify-content:space-between;align-items:center;"><h3 style="margin:0;">Missing muscle groups</h3><button class="badge-close" id="dismissMissing">✕</button></div>`;
   missing.forEach(grp=>{
-    const options = Object.entries(data.library).filter(([n,m])=>m.group===grp).map(([n])=>n).slice(0,2);
+    const options = suggestExercisesForGroup(grp);
     html += `<div style="margin-top:8px;"><div class="grp">${grp}</div>`;
     options.forEach(name=>{
       html += `<button class="btn small" data-quickadd="${escapeHtml(name)}" style="margin-right:6px;margin-bottom:6px;">+ ${escapeHtml(name)}</button>`;
@@ -582,13 +645,7 @@ function renderMissingGroups(){
   container.appendChild(card);
 
   card.querySelectorAll("[data-quickadd]").forEach(btn=>{
-    btn.addEventListener("click", ()=>{
-      document.getElementById("newExName").value = btn.dataset.quickadd;
-      renderLastSessionCompare();
-      document.getElementById("newExName").scrollIntoView({behavior:"smooth", block:"center"});
-      const firstWeightInput = document.querySelector("#setRows .set-weight");
-      if(firstWeightInput) firstWeightInput.focus();
-    });
+    btn.addEventListener("click", ()=> goAddExercise(btn.dataset.quickadd));
   });
   document.getElementById("dismissMissing").addEventListener("click", ()=>{ container.innerHTML=""; });
 }
@@ -718,7 +775,7 @@ document.getElementById("exportAIBtn").addEventListener("click", async ()=>{
     const hitGroups = new Set(currentSession.exercises.map(ex=> data.library[ex.name] && data.library[ex.name].group).filter(Boolean));
     const missing = SPLIT_GROUPS[type].filter(g=>!hitGroups.has(g));
     missing.forEach(grp=>{
-      const opts = Object.entries(data.library).filter(([n,m])=>m.group===grp).map(([n])=>n).slice(0,2);
+      const opts = suggestExercisesForGroup(grp);
       if(opts.length) suggestionLines.push(`${grp}: ${opts.join(", ")}`);
     });
   }
@@ -793,6 +850,53 @@ function renderHistory(){
       }
     });
   });
+}
+
+/* ---------- Coverage view ---------- */
+function renderGroupGrid(elId, hitSet){
+  const el = document.getElementById(elId);
+  el.innerHTML = ALL_GROUPS.map(g=>
+    `<span class="pill ${hitSet.has(g) ? 'ok' : 'warn'}">${hitSet.has(g)?'✓ ':''}${escapeHtml(g)}</span>`
+  ).join("");
+}
+function renderMissingCard(elId, missing){
+  const container = document.getElementById(elId);
+  if(!missing.length){ container.innerHTML = `<div class="card suggest-card"><div class="grp">All muscle groups covered 🎉</div></div>`; return; }
+  let html = `<div class="card suggest-card"><h3 style="margin:0 0 4px;">Missing</h3>`;
+  missing.forEach(grp=>{
+    const options = suggestExercisesForGroup(grp);
+    html += `<div style="margin-top:8px;"><div class="grp">${escapeHtml(grp)}</div>`;
+    options.forEach(name=>{
+      html += `<button class="btn small" data-covadd="${escapeHtml(name)}" style="margin-right:6px;margin-bottom:6px;">+ ${escapeHtml(name)}</button>`;
+    });
+    if(!options.length) html += `<div class="muted">No exercises in library for this group yet.</div>`;
+    html += `</div>`;
+  });
+  html += `</div>`;
+  container.innerHTML = html;
+  container.querySelectorAll("[data-covadd]").forEach(btn=>{
+    btn.addEventListener("click", ()=> goAddExercise(btn.dataset.covadd));
+  });
+}
+function renderCoverageView(){
+  // This week
+  const {start, end} = getWeekRange();
+  const weekSessions = getSessionsInRange(start, end);
+  const weekHit = new Set();
+  weekSessions.forEach(s=> getGroupsHit(s.exercises).forEach(g=>weekHit.add(g)));
+  const fmtLabel = iso => { const d = new Date(iso+"T00:00:00"); return d.toLocaleDateString(undefined,{month:"short",day:"numeric"}); };
+  document.getElementById("weekRangeLabel").textContent = `${fmtLabel(start)} – ${fmtLabel(end)}`;
+  renderGroupGrid("weekGroupGrid", weekHit);
+  document.getElementById("weekCoverageCount").textContent = `${weekHit.size} of ${ALL_GROUPS.length} muscle groups hit this week`;
+  renderMissingCard("weekMissingCard", ALL_GROUPS.filter(g=>!weekHit.has(g)));
+
+  // Current session
+  const sessHit = getGroupsHit(currentSession.exercises);
+  renderGroupGrid("sessionGroupGrid", sessHit);
+  document.getElementById("sessionCoverageCount").textContent = currentSession.exercises.length
+    ? `${sessHit.size} of ${ALL_GROUPS.length} muscle groups hit in today's session`
+    : `No exercises logged in the current session yet`;
+  renderMissingCard("sessionMissingCard", ALL_GROUPS.filter(g=>!sessHit.has(g)));
 }
 
 /* ---------- Settings view ---------- */
@@ -914,6 +1018,7 @@ document.querySelectorAll(".tab-btn").forEach(btn=>{
     btn.classList.add("active");
     document.getElementById(btn.dataset.view).classList.add("active");
     if(btn.dataset.view==="view-history") renderHistory();
+    if(btn.dataset.view==="view-coverage") renderCoverageView();
     if(btn.dataset.view==="view-settings") renderSettings();
   });
 });
