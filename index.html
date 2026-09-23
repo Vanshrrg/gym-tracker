@@ -482,8 +482,8 @@ function renderSetRows(){
     row.className = "set-row";
     row.innerHTML = `
       <span>Set ${i+1}</span>
-      <input type="number" class="set-weight" inputmode="decimal" placeholder="kg" value="${prevWeights[i]||''}">
-      <input type="number" class="set-reps" inputmode="numeric" placeholder="reps" value="${prevReps[i]||''}">
+      <input type="text" class="set-weight" inputmode="decimal" placeholder="kg" value="${prevWeights[i]||''}">
+      <input type="text" class="set-reps" inputmode="numeric" placeholder="reps" value="${prevReps[i]||''}">
       <span class="last-set-hint" data-hint="${i}"></span>
     `;
     container.appendChild(row);
@@ -494,13 +494,16 @@ function renderSetRows(){
   // typing a weight in Set 1 prefills the same weight into any still-empty later sets
   const firstWeightInput = container.querySelector(".set-row:first-child .set-weight");
   if(firstWeightInput){
-    firstWeightInput.addEventListener("input", ()=>{
+    const mirrorFirstWeight = ()=>{
       const val = firstWeightInput.value;
       container.querySelectorAll(".set-row:not(:first-child) .set-weight").forEach(inp=>{
         // keep mirroring the full value as it's typed, unless the user has edited this set directly
         if(!inp.dataset.userEdited) inp.value = val;
       });
-    });
+    };
+    // some mobile keyboards (Android Chrome) don't fire granular "input" events reliably,
+    // so also mirror on change/blur as a fallback
+    ["input","change","blur"].forEach(evt=> firstWeightInput.addEventListener(evt, mirrorFirstWeight));
   }
   container.querySelectorAll(".set-row:not(:first-child) .set-weight").forEach(inp=>{
     inp.addEventListener("input", ()=>{ inp.dataset.userEdited = "true"; });
