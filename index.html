@@ -496,12 +496,15 @@ function renderSetRows(){
   if(firstWeightInput){
     firstWeightInput.addEventListener("input", ()=>{
       const val = firstWeightInput.value;
-      if(val === "") return;
       container.querySelectorAll(".set-row:not(:first-child) .set-weight").forEach(inp=>{
-        if(inp.value === "") inp.value = val;
+        // keep mirroring the full value as it's typed, unless the user has edited this set directly
+        if(!inp.dataset.userEdited) inp.value = val;
       });
     });
   }
+  container.querySelectorAll(".set-row:not(:first-child) .set-weight").forEach(inp=>{
+    inp.addEventListener("input", ()=>{ inp.dataset.userEdited = "true"; });
+  });
   container.querySelectorAll(".set-weight").forEach(inp=>{
     inp.addEventListener("input", renderAddExWarmup);
   });
