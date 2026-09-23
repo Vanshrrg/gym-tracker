@@ -111,12 +111,14 @@
 
       <div id="lastSessionCompare"></div>
 
-      <label>Bodyweight?</label>
-      <select id="newExBW">
-        <option value="none">No</option>
-        <option value="weighted">Weighted (+BW to added weight)</option>
-        <option value="assisted">Assisted (BW − assistance weight)</option>
-      </select>
+      <div id="bwFieldWrap" style="display:none;">
+        <label>Bodyweight?</label>
+        <select id="newExBW">
+          <option value="none">No</option>
+          <option value="weighted">Weighted (+BW to added weight)</option>
+          <option value="assisted">Assisted (BW − assistance weight)</option>
+        </select>
+      </div>
 
       <label>Sets — each can have its own weight &amp; reps</label>
       <div id="setRows"></div>
@@ -124,9 +126,8 @@
         <button class="btn small" id="addSetRowBtn">+ Add set</button>
         <button class="btn small ghost" id="removeSetRowBtn">– Remove set</button>
       </div>
+      <div id="addExWarmup"></div>
 
-      <label>Notes (optional)</label>
-      <textarea id="newExNotes" placeholder="Notes..."></textarea>
       <div class="btn-row">
         <button class="btn primary" id="addExerciseBtn">Add Exercise</button>
       </div>
@@ -140,7 +141,6 @@
     </div>
 
     <div class="btn-row">
-      <button class="btn primary" id="saveSessionBtn">💾 Save Session</button>
       <button class="btn" id="exportAIBtn">📋 Export for AI</button>
       <button class="btn danger" id="clearSessionBtn">Clear</button>
     </div>
@@ -489,6 +489,7 @@ function renderSetRows(){
     container.appendChild(row);
   }
   updateSetRowHints();
+  renderAddExWarmup();
 
   // typing a weight in Set 1 prefills the same weight into any still-empty later sets
   const firstWeightInput = container.querySelector(".set-row:first-child .set-weight");
@@ -501,6 +502,34 @@ function renderSetRows(){
       });
     });
   }
+  container.querySelectorAll(".set-weight").forEach(inp=>{
+    inp.addEventListener("input", renderAddExWarmup);
+  });
+}
+
+/* live warm-up suggestion in the Add Exercise form, based on typed set weights
+   (or the progression-suggested weight when no set weight has been typed yet) */
+function renderAddExWarmup(){
+  const el = document.getElementById("addExWarmup");
+  if(!el) return;
+  const weights = Array.from(document.querySelectorAll("#setRows .set-weight"))
+    .map(inp=>parseFloat(inp.value)).filter(w=>!isNaN(w) && w>0);
+  let top = weights.length ? Math.max(...weights) : 0;
+  if(!top){
+    const name = resolveExerciseName(document.getElementById("newExName").value.trim());
+    if(name){
+      const prog = suggestProgression(name, getLastPerformance(name));
+      if(prog) top = prog.weightSuggestion;
+    }
+  }
+  const warm = warmupSuggestion(top);
+  if(!warm){ el.innerHTML = ""; return; }
+  el.innerHTML = `
+    <div class="card suggest-card" style="margin-top:6px;padding:10px;">
+      <div style="font-weight:600;margin-bottom:2px;">🔥 Warm-up suggestion</div>
+      ${warm.map(w=>`<div class="muted">${w.pct}% × ${w.reps} reps — ${w.w}kg</div>`).join("")}
+    </div>
+  `;
 }
 document.getElementById("addSetRowBtn").addEventListener("click", ()=>{
   if(setRowCount<MAX_SETS){ setRowCount++; renderSetRows(); }
@@ -525,11 +554,13 @@ function updateSetRowHints(){
 
 function renderLastSessionCompare(){
   const box = document.getElementById("lastSessionCompare");
+  const bwWrap = document.getElementById("bwFieldWrap");
   const rawName = document.getElementById("newExName").value.trim();
-  if(!rawName){ box.innerHTML = ""; return; }
+  if(!rawName){ box.innerHTML = ""; bwWrap.style.display = "none"; return; }
   const name = resolveExerciseName(rawName);
   const aliasNote = name.toLowerCase()!==rawName.toLowerCase() ? `<div class="muted">Tracked as "${escapeHtml(name)}"</div>` : "";
 
+  bwWrap.style.display = name.toLowerCase()==="assisted pull-up" ? "" : "none";
   const bwSelect = document.getElementById("newExBW");
   if(data.library[name] && data.library[name].bwMode){
     bwSelect.value = data.library[name].bwMode;
@@ -550,15 +581,20 @@ function renderLastSessionCompare(){
   if(useBtn){
     useBtn.addEventListener("click", ()=>{
       document.querySelectorAll(".set-weight").forEach(inp=> inp.value = prog.weightSuggestion);
+      renderAddExWarmup();
     });
   }
   updateSetRowHints();
+  renderAddExWarmup();
 }
 document.getElementById("newExName").addEventListener("input", renderLastSessionCompare);
 
 function getLastPerformance(exName){
+  // exclude the in-progress session itself — it's autosaved into data.sessions as you go,
+  // but "last time" should mean a genuinely prior session.
   for(let i=data.sessions.length-1;i>=0;i--){
     const s = data.sessions[i];
+    if(s.id === currentSession.id) continue;
     const ex = s.exercises.find(e=>e.name.toLowerCase()===exName.toLowerCase());
     if(ex) return {session:s, ex};
   }
@@ -663,6 +699,14 @@ function renderExerciseList(){
     btn.addEventListener("click", (e)=>{
       e.stopPropagation();
       currentSession.exercises.splice(parseInt(btn.dataset.remove),1);
+      if(!currentSession.exercises.length){
+        // last exercise removed — drop the now-empty session from saved history too
+        data.sessions = data.sessions.filter(s=>s.id!==currentSession.id);
+        saveData();
+        syncToGist();
+      } else {
+        persistCurrentSession();
+      }
       renderSessionView();
     });
   });
@@ -746,7 +790,6 @@ document.getElementById("addExerciseBtn").addEventListener("click", ()=>{
   const rawName = document.getElementById("newExName").value.trim();
   const name = resolveExerciseName(rawName);
   const bwModeSelected = document.getElementById("newExBW").value; // "none" | "weighted" | "assisted"
-  const notes = document.getElementById("newExNotes").value.trim();
 
   if(!name){ toast("Enter an exercise name"); return; }
 
@@ -769,22 +812,23 @@ document.getElementById("addExerciseBtn").addEventListener("click", ()=>{
     data.library[name] = {group:"other", bwMode};
   }
 
-  currentSession.exercises.push({ name, bwMode, sets, notes, volume:0, collapsed:false });
+  currentSession.exercises.push({ name, bwMode, sets, notes:"", volume:0, collapsed:false });
 
   document.getElementById("newExName").value = "";
   document.getElementById("newExBW").value = "none";
-  document.getElementById("newExNotes").value = "";
+  document.getElementById("bwFieldWrap").style.display = "none";
   document.getElementById("lastSessionCompare").innerHTML = "";
   setRowCount = 3;
   clearSetRowValues = true;
 
-  saveData();
+  persistCurrentSession();
   renderSessionView();
-  toast("Exercise added");
+  toast("Exercise added & saved");
 });
 
 document.getElementById("sessDate").addEventListener("change", e=>{
   currentSession.date = e.target.value;
+  persistCurrentSession();
 });
 document.getElementById("sessType").addEventListener("change", e=>{
   if(e.target.value){
@@ -794,12 +838,15 @@ document.getElementById("sessType").addEventListener("change", e=>{
     currentSession.typeManual = false;
     currentSession.type = inferSessionType(currentSession.exercises);
   }
+  persistCurrentSession();
   renderSessionView();
 });
 
-/* ---------- Save / Clear session ---------- */
-document.getElementById("saveSessionBtn").addEventListener("click", ()=>{
-  if(!currentSession.exercises.length){ toast("Add at least one exercise first"); return; }
+/* ---------- Autosave ---------- */
+// Every change to the current session is persisted immediately (upsert by session id) —
+// there's no separate "Save Session" step.
+function persistCurrentSession(){
+  if(!currentSession.exercises.length) return;
   const existingIdx = data.sessions.findIndex(s=>s.id===currentSession.id);
   const toSave = JSON.parse(JSON.stringify(currentSession));
   toSave.exercises.forEach(ex=> ex.volume = computeExerciseVolume(ex));
@@ -807,15 +854,19 @@ document.getElementById("saveSessionBtn").addEventListener("click", ()=>{
   else data.sessions.push(toSave);
   data.sessions.sort((a,b)=> a.date.localeCompare(b.date));
   saveData();
-  toast("Session saved");
   syncToGist();
-  currentSession = newEmptySession();
-  renderSessionView();
-  renderHistory();
-});
+}
 
 document.getElementById("clearSessionBtn").addEventListener("click", ()=>{
-  if(confirm("Clear current session data?")){
+  const isSaved = data.sessions.some(s=>s.id===currentSession.id);
+  const msg = isSaved ? "This session is already saved — clearing will permanently delete it. Continue?" : "Clear current session data?";
+  if(confirm(msg)){
+    if(isSaved){
+      data.sessions = data.sessions.filter(s=>s.id!==currentSession.id);
+      saveData();
+      syncToGist();
+      renderHistory();
+    }
     currentSession = newEmptySession();
     renderSessionView();
   }
@@ -832,8 +883,17 @@ function formatSessionForExport(s){
   return lines.join("\n");
 }
 
+function formatLastComparisonForExport(exercises){
+  const lines = exercises.map(ex=>{
+    const last = getLastPerformance(ex.name);
+    if(!last) return `  - ${ex.name}: no prior history`;
+    const setsStr = last.ex.sets.map(st=>`${st.weight}kg×${st.reps}`).join(", ");
+    return `  - ${ex.name}: last (${last.session.date}): [${setsStr}] | Volume: ${last.ex.volume||computeExerciseVolume(last.ex)}kg`;
+  });
+  return lines.join("\n");
+}
+
 document.getElementById("exportAIBtn").addEventListener("click", async ()=>{
-  const history = data.sessions.slice(-4);
   const todaysData = JSON.parse(JSON.stringify(currentSession));
   todaysData.exercises.forEach(ex=> ex.volume = computeExerciseVolume(ex));
 
@@ -852,15 +912,14 @@ document.getElementById("exportAIBtn").addEventListener("click", async ()=>{
   const block = `You are a strength and body recomposition coach. Analyze the following workout data and provide:
 1. Progressive overload recommendations for each exercise (increase weight, reps, or sets)
 2. Whether the session volume and intensity is appropriate for body recomposition (BW: ${data.bodyweight} kg)
-3. Any muscle groups that appear undertrained based on session history
-4. Suggested exercises to add or swap based on the data below
-5. Assessment of the inferred training split pattern and whether frequency is optimal
-
---- SESSION HISTORY ---
-${history.length ? history.map(formatSessionForExport).join("\n") : "(no prior sessions)"}
+3. Suggested exercises to add or swap based on the data below
+4. Assessment of the inferred training split pattern
 
 --- TODAY'S SESSION ---
 ${formatSessionForExport(todaysData)}
+
+--- LAST TIME COMPARISON (per exercise) ---
+${currentSession.exercises.length ? formatLastComparisonForExport(currentSession.exercises) : "(no exercises logged yet)"}
 
 --- EXERCISE LIBRARY SUGGESTIONS ---
 ${suggestionLines.length ? suggestionLines.join("\n") : "(none — all expected muscle groups covered)"}`;
