@@ -225,7 +225,7 @@ const defaultData = () => ({
 });
 
 function defaultLibrary(){
-  return {
+  const lib = {
     "Pull-up": {group:"lats", bwMode:"weighted"},
     "Assisted Pull-up": {group:"lats", bwMode:"assisted"},
     "Chin-up": {group:"lats", bwMode:"weighted"},
@@ -287,8 +287,16 @@ function defaultLibrary(){
     "Seated Calf Raise": {group:"calves", bwMode:"none"},
     "Back Extension Machine": {group:"lower back", bwMode:"none"},
     "Deadlift": {group:"lower back", bwMode:"none"},
-    "Superman": {group:"lower back", bwMode:"none"}
+    "Superman": {group:"lower back", bwMode:"none"},
+    "Rotary Torso": {group:"abs & obliques", bwMode:"none"},
+    "Incline Chest Press Machine": {group:"chest", bwMode:"none"},
+    "Chest Fly Machine": {group:"chest", bwMode:"none"},
+    "Shoulder Press Machine": {group:"front delts", bwMode:"none"},
+    "Dumbbell Shoulder Shrug": {group:"traps", bwMode:"none"},
+    "Hip Adduction Machine": {group:"glutes", bwMode:"none"}
   };
+  Object.entries(DEFAULT_FOCUS).forEach(([name, focus])=>{ if(lib[name]) lib[name].focus = focus; });
+  return lib;
 }
 
 // Different gym names for the same movement — resolved to one canonical library entry
@@ -300,13 +308,104 @@ const EXERCISE_ALIASES = {
   "Cable Reverse Fly": "Rear Delt Fly",
   "Seated Leg Curl": "Leg Curl",
   "Lying Leg Curl": "Leg Curl",
-  "Standing Calf Raise": "Calf Raise"
+  "Standing Calf Raise": "Calf Raise",
+  "Machine Chest Press": "Chest Press Machine",
+  "Chest Press": "Chest Press Machine",
+  "Leg Press Machine": "Leg Press",
+  "Hack Squat Machine": "Hack Squat",
+  "Leg Extension Machine": "Leg Extension",
+  "Lat Pulldown Machine": "Lat Pulldown",
+  "Seated Calf Raise Machine": "Seated Calf Raise",
+  "Hip Abduction": "Hip Abduction Machine",
+  "Back Extension": "Back Extension Machine",
+  "Pushup": "Push-up",
+  "Pull Up": "Pull-up",
+  "Chin Up": "Chin-up",
+  "Dumbbell Bicep Curl": "Dumbbell Curl",
+  "Barbell Bicep Curl": "Barbell Curl",
+  "Cable Bicep Curl": "Cable Curl",
+  "Cable Tricep Pushdown": "Tricep Pushdown",
+  "Rope Pushdown": "Tricep Pushdown",
+  "Incline chest press": "Incline Chest Press Machine",
+  "Shoulder press": "Shoulder Press Machine",
+  "Machine chest fly": "Chest Fly Machine",
+  "Shoulder shrug": "Dumbbell Shoulder Shrug",
+  "Dumbbell shoulder shrug": "Dumbbell Shoulder Shrug",
+  "Hip adduction": "Hip Adduction Machine"
 };
 const ALIAS_LOOKUP = Object.fromEntries(Object.entries(EXERCISE_ALIASES).map(([k,v])=>[k.toLowerCase(), v]));
-function resolveExerciseName(name){
+// Resolves aliases, then matches library names case-insensitively ("incline chest press machine"
+// -> "Incline Chest Press Machine") so typed casing never creates a separate "other" exercise.
+function resolveExerciseName(name, library){
   const trimmed = (name||"").trim();
-  return ALIAS_LOOKUP[trimmed.toLowerCase()] || trimmed;
+  const lower = trimmed.toLowerCase();
+  if(ALIAS_LOOKUP[lower]) return ALIAS_LOOKUP[lower];
+  const lib = library || data.library;
+  return Object.keys(lib).find(k=>k.toLowerCase()===lower) || trimmed;
 }
+
+// Sub-areas within a muscle group. A group with required focus areas only counts as fully
+// trained once each area is hit (e.g. chest needs both incline and flat work).
+const REQUIRED_FOCUS = {
+  "chest": ["upper chest","mid chest"],
+  "front delts": ["presses","side delts"],
+  "triceps": ["long head","lateral head"],
+  "biceps": ["long head","short head"],
+  "hamstrings": ["hip hinge","leg curl"],
+  "calves": ["standing","seated"]
+};
+const DEFAULT_FOCUS = {
+  "Bench Press":"mid chest", "Chest Press Machine":"mid chest", "Cable Fly":"mid chest",
+  "Chest Fly Machine":"mid chest", "Push-up":"mid chest", "Decline Bench Press":"lower chest",
+  "Incline Dumbbell Press":"upper chest", "Incline Barbell Press":"upper chest", "Incline Chest Press Machine":"upper chest",
+  "Overhead Press":"presses", "Dumbbell Shoulder Press":"presses", "Arnold Press":"presses",
+  "Shoulder Press Machine":"presses", "Lateral Raise":"side delts",
+  "Overhead Tricep Extension":"long head", "Skull Crusher":"long head",
+  "Tricep Pushdown":"lateral head", "Cable Kickback":"lateral head", "Close-Grip Bench Press":"lateral head",
+  "Dip":"lateral head", "Assisted Dip":"lateral head",
+  "Incline Dumbbell Curl":"long head", "Preacher Curl":"short head", "Concentration Curl":"short head",
+  "Barbell Curl":["long head","short head"], "Dumbbell Curl":["long head","short head"], "Cable Curl":["long head","short head"],
+  "Romanian Deadlift":"hip hinge", "Good Morning":"hip hinge", "Leg Curl":"leg curl", "Nordic Curl":"leg curl",
+  "Calf Raise":"standing", "Seated Calf Raise":"seated"
+};
+
+// Best-guess muscle group for exercises not in the library, so new names aren't dumped in "other".
+// Order matters: more specific patterns first.
+const GROUP_RULES = [
+  [/rear delt|reverse fly|face pull/, "rear delts"],
+  [/shrug/, "traps"],
+  [/glute|hip thrust|abduct|adduct|bridge/, "glutes"],
+  [/tricep|pushdown|skull|kickback|\bdips?\b|close.grip/, "triceps"],
+  [/hammer|reverse curl/, "brachialis"],
+  [/leg curl|hamstring|nordic|romanian|\brdl\b|good morning|stiff.leg/, "hamstrings"],
+  [/curl/, "biceps"],
+  [/calf|calves/, "calves"],
+  [/lateral|side raise|front raise|shoulder press|overhead press|military|arnold/, "front delts"],
+  [/chest|bench|incline|decline|pec|\bfly|push.?up/, "chest"],
+  [/pulldown|pull.?up|chin.?up|\blats?\b/, "lats"],
+  [/\brow/, "mid-back"],
+  [/back extension|hyperextension|deadlift|superman/, "lower back"],
+  [/squat|leg press|lunge|leg extension|step.?up/, "quads"],
+  [/crunch|\babs?\b|oblique|plank|twist|torso|leg raise|wood.?chop/, "abs & obliques"]
+];
+function guessGroup(name){
+  const n = (name||"").toLowerCase();
+  const rule = GROUP_RULES.find(([re])=>re.test(n));
+  return rule ? rule[1] : "other";
+}
+function guessFocus(group, name){
+  const n = (name||"").toLowerCase();
+  switch(group){
+    case "chest": return /incline/.test(n) ? "upper chest" : /decline/.test(n) ? "lower chest" : "mid chest";
+    case "front delts": return /lateral|side|raise/.test(n) ? "side delts" : "presses";
+    case "triceps": return /overhead|skull|french/.test(n) ? "long head" : "lateral head";
+    case "biceps": return /incline|bayesian/.test(n) ? "long head" : /preacher|concentration|spider/.test(n) ? "short head" : ["long head","short head"];
+    case "hamstrings": return /curl|nordic/.test(n) ? "leg curl" : "hip hinge";
+    case "calves": return /seated/.test(n) ? "seated" : "standing";
+    default: return [];
+  }
+}
+function focusOf(meta){ return meta ? [].concat(meta.focus||[]) : []; }
 
 const SPLIT_GROUPS = {
   push: ["chest","front delts","triceps"],
@@ -314,16 +413,17 @@ const SPLIT_GROUPS = {
   legs: ["quads","hamstrings","glutes","calves"],
   upper: ["chest","front delts","triceps","lats","mid-back","rear delts","biceps","brachialis","lower back"],
   lower: ["quads","hamstrings","glutes","calves"],
-  full: ["chest","front delts","triceps","lats","mid-back","rear delts","biceps","brachialis","lower back","quads","hamstrings","glutes","calves"]
+  full: ["chest","front delts","triceps","lats","mid-back","rear delts","biceps","brachialis","lower back","quads","hamstrings","glutes","calves","abs & obliques","traps"]
 };
 
-const ALL_GROUPS = ["lats","mid-back","rear delts","biceps","brachialis","lower back","chest","front delts","triceps","quads","hamstrings","glutes","calves"];
+const ALL_GROUPS = ["lats","mid-back","rear delts","biceps","brachialis","lower back","chest","front delts","triceps","quads","hamstrings","glutes","calves","abs & obliques","traps"];
 
 let data = loadData();
 let currentSession = null; // in-progress session object
 
-function migrateExercise(ex){
+function migrateExercise(ex, library){
   // old format: {name, weight, bw, reps:[...], notes} -> new: {name, bwMode, notes, sets:[{weight,reps}]}
+  ex.name = resolveExerciseName(ex.name, library);
   if(!ex.sets){
     const reps = ex.reps || [10,10,10];
     ex.sets = reps.map(r=>({weight: ex.weight||0, reps: r}));
@@ -346,14 +446,31 @@ function loadData(){
     const raw = localStorage.getItem(STORAGE_KEY);
     if(!raw) return defaultData();
     const parsed = JSON.parse(raw);
-    const merged = Object.assign(defaultData(), parsed, {library: Object.assign(defaultLibrary(), parsed.library||{})});
-    merged.sessions = (merged.sessions||[]).map(s=>{
-      s.exercises = (s.exercises||[]).map(migrateExercise);
-      return s;
-    });
-    Object.values(merged.library).forEach(migrateLibraryEntry);
+    const merged = Object.assign(defaultData(), parsed);
+    merged.library = normalizeLibrary(parsed.library);
+    merged.sessions = normalizeSessions(merged.sessions, merged.library);
     return merged;
   }catch(e){ return defaultData(); }
+}
+// Built-in exercises always take their group/focus from defaultLibrary (so fixes to groups reach
+// existing users); saved entries that are aliases or case variants of a known name are dropped;
+// custom exercises left in "other" get a best-guess group.
+function normalizeLibrary(saved){
+  const lib = defaultLibrary();
+  Object.entries(saved||{}).forEach(([name, meta])=>{
+    if(lib[resolveExerciseName(name, lib)]) return;
+    migrateLibraryEntry(meta);
+    if(!meta.group || meta.group==="other") meta.group = guessGroup(name);
+    if(meta.focus===undefined) meta.focus = guessFocus(meta.group, name);
+    lib[name] = meta;
+  });
+  return lib;
+}
+function normalizeSessions(sessions, library){
+  return (sessions||[]).map(s=>{
+    s.exercises = (s.exercises||[]).map(ex=>migrateExercise(ex, library));
+    return s;
+  });
 }
 function saveData(){
   try{
@@ -364,9 +481,12 @@ function saveData(){
 }
 
 /* ---------- Utilities ---------- */
+// local-time YYYY-MM-DD (toISOString is UTC and shifts the date in non-UTC timezones)
+function localDateStr(d){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
 function todayStr(){
-  const d = new Date();
-  return d.toISOString().slice(0,10);
+  return localDateStr(new Date());
 }
 function toast(msg){
   const t = document.getElementById("toast");
@@ -418,8 +538,7 @@ function getWeekRange(dateStr){
   monday.setDate(d.getDate() + diffToMonday);
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
-  const fmt = x => x.toISOString().slice(0,10);
-  return { start: fmt(monday), end: fmt(sunday) };
+  return { start: localDateStr(monday), end: localDateStr(sunday) };
 }
 function getGroupsHit(exercises){
   const hit = new Set();
@@ -436,9 +555,41 @@ function getSessionsInRange(start, end){
   }
   return sessions;
 }
+// Library exercises for a group (optionally one focus area), ones you've logged most often first.
+function exercisesFor(grp, focus){
+  const usage = {};
+  data.sessions.forEach(s=> s.exercises.forEach(ex=>{ usage[ex.name] = (usage[ex.name]||0)+1; }));
+  return Object.entries(data.library)
+    .filter(([name,m])=> m.group===grp && (!focus || focusOf(m).includes(focus)))
+    .map(([name])=>name)
+    .sort((a,b)=> (usage[b]||0)-(usage[a]||0));
+}
+// For groups with focus areas, suggest one exercise per area (e.g. an incline AND a flat chest press).
 function suggestExercisesForGroup(grp, n){
-  n = n || 2;
-  return Object.entries(data.library).filter(([name,m])=>m.group===grp).map(([name])=>name).slice(0,n);
+  const req = REQUIRED_FOCUS[grp];
+  if(req) return [...new Set(req.map(f=>exercisesFor(grp, f)[0]).filter(Boolean))];
+  return exercisesFor(grp).slice(0, n||2);
+}
+// What's still missing from `groups` given these exercises: whole groups not hit, plus focus areas
+// not hit within groups that were trained (e.g. incline chest done but no flat chest).
+function findGaps(exercises, groups){
+  const hitGroups = getGroupsHit(exercises);
+  const hitFocus = new Set();
+  (exercises||[]).forEach(ex=>{
+    const meta = data.library[ex.name];
+    focusOf(meta).forEach(f=> hitFocus.add(meta.group+"|"+f));
+  });
+  const gaps = [];
+  groups.forEach(grp=>{
+    if(!hitGroups.has(grp)){
+      gaps.push({group:grp, focus:null, label:grp, options:suggestExercisesForGroup(grp)});
+      return;
+    }
+    (REQUIRED_FOCUS[grp]||[]).filter(f=>!hitFocus.has(grp+"|"+f)).forEach(f=>{
+      gaps.push({group:grp, focus:f, label:`${grp} · ${f}`, options:exercisesFor(grp, f).slice(0,2)});
+    });
+  });
+  return gaps;
 }
 function goAddExercise(name){
   document.querySelector('.tab-btn[data-view="view-session"]').click();
@@ -738,22 +889,15 @@ function renderMissingGroups(){
   container.innerHTML = "";
   const type = currentSession.type;
   if(!type || !SPLIT_GROUPS[type] || !currentSession.exercises.length){ return; }
-  const expected = SPLIT_GROUPS[type];
-  const hitGroups = new Set();
-  currentSession.exercises.forEach(ex=>{
-    const meta = data.library[ex.name];
-    if(meta) hitGroups.add(meta.group);
-  });
-  const missing = expected.filter(g=>!hitGroups.has(g));
-  if(!missing.length) return;
+  const gaps = findGaps(currentSession.exercises, SPLIT_GROUPS[type]);
+  if(!gaps.length) return;
 
   const card = document.createElement("div");
   card.className = "card suggest-card";
   let html = `<div style="display:flex;justify-content:space-between;align-items:center;"><h3 style="margin:0;">Missing muscle groups</h3><button class="badge-close" id="dismissMissing">✕</button></div>`;
-  missing.forEach(grp=>{
-    const options = suggestExercisesForGroup(grp);
-    html += `<div style="margin-top:8px;"><div class="grp">${grp}</div>`;
-    options.forEach(name=>{
+  gaps.forEach(gap=>{
+    html += `<div style="margin-top:8px;"><div class="grp">${escapeHtml(gap.label)}</div>`;
+    gap.options.forEach(name=>{
       html += `<button class="btn small" data-quickadd="${escapeHtml(name)}" style="margin-right:6px;margin-bottom:6px;">+ ${escapeHtml(name)}</button>`;
     });
     html += `</div>`;
@@ -815,7 +959,8 @@ document.getElementById("addExerciseBtn").addEventListener("click", ()=>{
 
   // add to library if unknown
   if(!data.library[name]){
-    data.library[name] = {group:"other", bwMode};
+    const group = guessGroup(name);
+    data.library[name] = {group, focus: guessFocus(group, name), bwMode};
   }
 
   currentSession.exercises.push({ name, bwMode, sets, notes:"", volume:0, collapsed:false });
@@ -907,11 +1052,8 @@ document.getElementById("exportAIBtn").addEventListener("click", async ()=>{
   let suggestionLines = [];
   const type = currentSession.type;
   if(type && SPLIT_GROUPS[type]){
-    const hitGroups = new Set(currentSession.exercises.map(ex=> data.library[ex.name] && data.library[ex.name].group).filter(Boolean));
-    const missing = SPLIT_GROUPS[type].filter(g=>!hitGroups.has(g));
-    missing.forEach(grp=>{
-      const opts = suggestExercisesForGroup(grp);
-      if(opts.length) suggestionLines.push(`${grp}: ${opts.join(", ")}`);
+    findGaps(currentSession.exercises, SPLIT_GROUPS[type]).forEach(gap=>{
+      if(gap.options.length) suggestionLines.push(`${gap.label}: ${gap.options.join(", ")}`);
     });
   }
 
@@ -1013,17 +1155,16 @@ function renderGroupGrid(elId, hitSet){
     `<span class="pill ${hitSet.has(g) ? 'ok' : 'warn'}">${hitSet.has(g)?'✓ ':''}${escapeHtml(g)}</span>`
   ).join("");
 }
-function renderMissingCard(elId, missing){
+function renderMissingCard(elId, gaps){
   const container = document.getElementById(elId);
-  if(!missing.length){ container.innerHTML = `<div class="card suggest-card"><div class="grp">All muscle groups covered 🎉</div></div>`; return; }
+  if(!gaps.length){ container.innerHTML = `<div class="card suggest-card"><div class="grp">All muscle groups covered 🎉</div></div>`; return; }
   let html = `<div class="card suggest-card"><h3 style="margin:0 0 4px;">Missing</h3>`;
-  missing.forEach(grp=>{
-    const options = suggestExercisesForGroup(grp);
-    html += `<div style="margin-top:8px;"><div class="grp">${escapeHtml(grp)}</div>`;
-    options.forEach(name=>{
+  gaps.forEach(gap=>{
+    html += `<div style="margin-top:8px;"><div class="grp">${escapeHtml(gap.label)}</div>`;
+    gap.options.forEach(name=>{
       html += `<button class="btn small" data-covadd="${escapeHtml(name)}" style="margin-right:6px;margin-bottom:6px;">+ ${escapeHtml(name)}</button>`;
     });
-    if(!options.length) html += `<div class="muted">No exercises in library for this group yet.</div>`;
+    if(!gap.options.length) html += `<div class="muted">No exercises in library for this group yet.</div>`;
     html += `</div>`;
   });
   html += `</div>`;
@@ -1042,7 +1183,7 @@ function renderCoverageView(){
   document.getElementById("weekRangeLabel").textContent = `${fmtLabel(start)} – ${fmtLabel(end)}`;
   renderGroupGrid("weekGroupGrid", weekHit);
   document.getElementById("weekCoverageCount").textContent = `${weekHit.size} of ${ALL_GROUPS.length} muscle groups hit this week`;
-  renderMissingCard("weekMissingCard", ALL_GROUPS.filter(g=>!weekHit.has(g)));
+  renderMissingCard("weekMissingCard", findGaps(weekSessions.flatMap(s=>s.exercises), ALL_GROUPS));
 
   // Current session
   const sessHit = getGroupsHit(currentSession.exercises);
@@ -1050,7 +1191,7 @@ function renderCoverageView(){
   document.getElementById("sessionCoverageCount").textContent = currentSession.exercises.length
     ? `${sessHit.size} of ${ALL_GROUPS.length} muscle groups hit in today's session`
     : `No exercises logged in the current session yet`;
-  renderMissingCard("sessionMissingCard", ALL_GROUPS.filter(g=>!sessHit.has(g)));
+  renderMissingCard("sessionMissingCard", findGaps(currentSession.exercises, ALL_GROUPS));
 }
 
 /* ---------- Settings view ---------- */
@@ -1144,8 +1285,8 @@ async function pullFromGist(){
     if(!file) throw new Error("gym-tracker.json not found in gist");
     const remote = JSON.parse(file.content);
     data.bodyweight = remote.bodyweight ?? data.bodyweight;
-    data.sessions = remote.sessions || [];
-    data.library = Object.assign(defaultLibrary(), remote.library||{});
+    data.library = normalizeLibrary(remote.library);
+    data.sessions = normalizeSessions(remote.sessions, data.library);
     saveData();
     renderAll();
     data.lastSync = new Date().toISOString();
