@@ -572,24 +572,48 @@ function suggestExercisesForGroup(grp, n){
 }
 // What's still missing from `groups` given these exercises: whole groups not hit, plus focus areas
 // not hit within groups that were trained (e.g. incline chest done but no flat chest).
+// Hitting any one area counts the group as trained, so area gaps are `partial` (optional extras).
 function findGaps(exercises, groups){
   const hitGroups = getGroupsHit(exercises);
   const hitFocus = new Set();
+  const doneByGroup = {};
   (exercises||[]).forEach(ex=>{
     const meta = data.library[ex.name];
+    if(!meta) return;
     focusOf(meta).forEach(f=> hitFocus.add(meta.group+"|"+f));
+    (doneByGroup[meta.group] = doneByGroup[meta.group] || new Set()).add(ex.name);
   });
   const gaps = [];
   groups.forEach(grp=>{
     if(!hitGroups.has(grp)){
-      gaps.push({group:grp, focus:null, label:grp, options:suggestExercisesForGroup(grp)});
+      gaps.push({group:grp, focus:null, partial:false, label:grp, options:suggestExercisesForGroup(grp)});
       return;
     }
     (REQUIRED_FOCUS[grp]||[]).filter(f=>!hitFocus.has(grp+"|"+f)).forEach(f=>{
-      gaps.push({group:grp, focus:f, label:`${grp} · ${f}`, options:exercisesFor(grp, f).slice(0,2)});
+      gaps.push({group:grp, focus:f, partial:true, done:[...doneByGroup[grp]],
+        label:`${grp}: add ${f}`, options:exercisesFor(grp, f).slice(0,2)});
     });
   });
   return gaps;
+}
+// Card body for a gap list: untrained groups first, then optional areas within trained groups.
+function gapsHtml(gaps, dataAttr){
+  const section = (title, list)=>{
+    if(!list.length) return "";
+    let html = `<div class="muted" style="margin-top:10px;font-size:13px;">${title}</div>`;
+    list.forEach(gap=>{
+      html += `<div style="margin-top:6px;"><div class="grp">${escapeHtml(gap.label)}</div>`;
+      if(gap.partial) html += `<div class="muted" style="font-size:12px;margin-bottom:4px;">Covered by ${escapeHtml(gap.done.join(", "))}</div>`;
+      gap.options.forEach(name=>{
+        html += `<button class="btn small" ${dataAttr}="${escapeHtml(name)}" style="margin-right:6px;margin-bottom:6px;">+ ${escapeHtml(name)}</button>`;
+      });
+      if(!gap.options.length) html += `<div class="muted">No exercises in library for this yet.</div>`;
+      html += `</div>`;
+    });
+    return html;
+  };
+  return section("Not trained yet", gaps.filter(g=>!g.partial))
+       + section("Trained — optional to round it out", gaps.filter(g=>g.partial));
 }
 function goAddExercise(name){
   document.querySelector('.tab-btn[data-view="view-session"]').click();
@@ -894,15 +918,9 @@ function renderMissingGroups(){
 
   const card = document.createElement("div");
   card.className = "card suggest-card";
-  let html = `<div style="display:flex;justify-content:space-between;align-items:center;"><h3 style="margin:0;">Missing muscle groups</h3><button class="badge-close" id="dismissMissing">✕</button></div>`;
-  gaps.forEach(gap=>{
-    html += `<div style="margin-top:8px;"><div class="grp">${escapeHtml(gap.label)}</div>`;
-    gap.options.forEach(name=>{
-      html += `<button class="btn small" data-quickadd="${escapeHtml(name)}" style="margin-right:6px;margin-bottom:6px;">+ ${escapeHtml(name)}</button>`;
-    });
-    html += `</div>`;
-  });
-  card.innerHTML = html;
+  const heading = gaps.some(g=>!g.partial) ? "Gaps in today's session" : "All groups trained 👍";
+  card.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;"><h3 style="margin:0;">${heading}</h3><button class="badge-close" id="dismissMissing">✕</button></div>`
+    + gapsHtml(gaps, "data-quickadd");
   container.appendChild(card);
 
   card.querySelectorAll("[data-quickadd]").forEach(btn=>{
@@ -1053,7 +1071,7 @@ document.getElementById("exportAIBtn").addEventListener("click", async ()=>{
   const type = currentSession.type;
   if(type && SPLIT_GROUPS[type]){
     findGaps(currentSession.exercises, SPLIT_GROUPS[type]).forEach(gap=>{
-      if(gap.options.length) suggestionLines.push(`${gap.label}: ${gap.options.join(", ")}`);
+      if(gap.options.length) suggestionLines.push(`${gap.label}${gap.partial ? " (optional, group already trained)" : ""}: ${gap.options.join(", ")}`);
     });
   }
 
@@ -1158,17 +1176,8 @@ function renderGroupGrid(elId, hitSet){
 function renderMissingCard(elId, gaps){
   const container = document.getElementById(elId);
   if(!gaps.length){ container.innerHTML = `<div class="card suggest-card"><div class="grp">All muscle groups covered 🎉</div></div>`; return; }
-  let html = `<div class="card suggest-card"><h3 style="margin:0 0 4px;">Missing</h3>`;
-  gaps.forEach(gap=>{
-    html += `<div style="margin-top:8px;"><div class="grp">${escapeHtml(gap.label)}</div>`;
-    gap.options.forEach(name=>{
-      html += `<button class="btn small" data-covadd="${escapeHtml(name)}" style="margin-right:6px;margin-bottom:6px;">+ ${escapeHtml(name)}</button>`;
-    });
-    if(!gap.options.length) html += `<div class="muted">No exercises in library for this group yet.</div>`;
-    html += `</div>`;
-  });
-  html += `</div>`;
-  container.innerHTML = html;
+  const heading = gaps.some(g=>!g.partial) ? "Gaps" : "All muscle groups trained 👍";
+  container.innerHTML = `<div class="card suggest-card"><h3 style="margin:0 0 4px;">${heading}</h3>${gapsHtml(gaps, "data-covadd")}</div>`;
   container.querySelectorAll("[data-covadd]").forEach(btn=>{
     btn.addEventListener("click", ()=> goAddExercise(btn.dataset.covadd));
   });
